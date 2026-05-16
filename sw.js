@@ -1,20 +1,41 @@
-const CACHE = 'jizhanben-v1';
-const ASSETS = ['./index.html', './manifest.json', './icon-192.png', './icon-512.png'];
+const CACHE_NAME = 'minimal-money-v1';
+// 需要缓存的资源列表（包含网页本身和在线的 React 库）
+const ASSETS = [
+  './',
+  './index.html',
+  './manifest.json',
+  'https://unpkg.com/react@18/umd/react.production.min.js',
+  'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
+  'https://unpkg.com/@babel/standalone/babel.min.js'
+];
 
-self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
-  self.skipWaiting();
+// 安装时：把所有东西存进手机
+self.addEventListener('install', (e) => {
+  e.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(ASSETS);
+    }).then(() => self.skipWaiting())
+  );
 });
 
-self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(keys =>
-    Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-  ));
-  self.clients.claim();
+// 激活时：清理旧缓存
+self.addEventListener('activate', (e) => {
+  e.waitUntil(
+    caches.keys().then((keys) => {
+      return Promise.all(
+        keys.map((key) => {
+          if (key !== CACHE_NAME) return caches.delete(key);
+        })
+      );
+    }).then(() => self.clients.claim())
+  );
 });
 
-self.addEventListener('fetch', e => {
+// 发起请求时：优先使用手机本地缓存，没网也能开
+self.addEventListener('fetch', (e) => {
   e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request))
+    caches.match(e.request).then((response) => {
+      return response || fetch(e.request);
+    })
   );
 });
