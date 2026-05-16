@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>极简记账本 Pro</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        body { margin: 0; padding: 0; background-color: #F8F9FD; font-family: -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; }
+        #root { max-width: 480px; margin: 0 auto; min-height: 100vh; position: relative; }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        ::-webkit-scrollbar { display: none; }
+        .num-btn { padding: 16px; borderRadius: 12px; border: none; background: #fff; color: #333; font-weight: 600; font-size: 18px; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .num-btn:active { background: #f0f0f0; }
+        .primary-btn { background: #1a1a1a !important; color: #fff !important; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo, useEffect } = React;
+
+        const DEFAULT_CATEGORIES = {
+            income: [{ id: "i1", name: "工资", icon: "💰" }, { id: "i2", name: "奖金", icon: "🎁" }, { id: "i3", name: "理财", icon: "📈" }],
+            expense: [{ id: "e1", name: "餐饮", icon: "🍜" }, { id: "e2", name: "购物", icon: "🛍️" }, { id: "e3", name: "交通", icon: "🚌" }, { id: "e4", name: "娱乐", icon: "🎮" }]
+        };
+        const ICON_OPTIONS = ["💰","🎁","📈","💼","🧧","🍜","🛍️","🚌","🎮","💊","📚","✈️","🏠","💡","🍕","☕","🚗","🐶","🎨","📱","🛒","🎬","🌸"];
+
+        const fmt = (n) => "¥" + Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2 });
+        const getMonthKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        const getDateKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+        function App() {
+            // --- 数据持久化状态 ---
+            const [records, setRecords] = useState(() => JSON.parse(localStorage.getItem('records')) || []);
+            const [initialBalance, setInitialBalance] = useState(() => Number(localStorage.getItem('initBal')) || 0);
+            const [customCats, setCustomCats] = useState(() => JSON.parse(localStorage.getItem('customCats')) || { income: [], expense: [] });
+            
+            // --- UI 状态 ---
+            const [modal, setModal] = useState(null); // 'record' | 'balance' | 'manageCats'
+            const [viewMonth, setViewMonth] = useState(getMonthKey(new Date()));
+            const [calcExpr, setCalcExpr] = useState("");
+
+            // 记账表单
+            const [form, setForm] = useState({ id: null, type: "expense", amount: "0", category: null, desc: "", date: getDateKey(new Date()) });
+            // 初始金额设置表单
+            const [tempBal, setTempBal] = useState("0");
+
+            const allCats = useMemo(() => ({
+                income: [...DEFAULT_CATEGORIES.income, ...customCats.income],
+                expense: [...DEFAULT_CATEGORIES.expense, ...customCats.expense]
+            }), [customCats]);
+
+            useEffect(() => localStorage.setItem('records', JSON.stringify(records)), [records]);
+            useEffect(() => localStorage.setItem('initBal', initialBalance), [initialBalance]);
+            useEffect(() => localStorage.setItem('customCats', JSON.stringify(customCats)), [customCats]);
+
+            // --- 核心计算器逻辑 (复用型) ---
+            const onKeyboardInput = (key, currentVal, setVal, onConfirm) => {
+                if (/[0-9.]/.test(key)) {
+                    setVal(v => (v === "0" && key !== "." ? key : v + key));
+                } else if (["+", "-", "*", "/"].includes(key)) {
+                    setCalcExpr(currentVal + key);
+                    setVal("0");
+                } else if (key === "AC") {
+                    setVal("0");
+                    setCalcExpr("");
+                } else if (key === "删除") {
+                    setVal(v => v.length > 1 ? v.slice(0, -1) : "0");
+                } else if (key === "确定" || key === "=") {
+                    try {
+                        const expression = calcExpr + currentVal;
+                        const result = eval(expression);
+                        const final = String(Math.max(-9999999, result).toFixed(2));
+                        if (key === "确定") {
+                            onConfirm(Number(final));
+                            setCalcExpr("");
+                        } else {
+                            setVal(final);
+                            setCalcExpr("");
+                        }
+                    } catch { alert("计算错误"); }
+                }
+            };
+
+            const submitRecord = (finalAmt) => {
+                if (finalAmt === 0 && Number(form.amount) === 0) return;
+                const entry = {
+                    id: form.id || Date.now(),
+                    type: form.type,
+                    amount: Math.abs(finalAmt || Number(form.amount)),
+                    category: form.category?.name || "其他",
+                    icon: form.category?.icon || "📌",
+                    desc: form.desc || form.category?.name,
+                    ts: new Date(form.date).getTime()
+                };
+                setRecords(prev => form.id ? prev.map(r => r.id === form.id ? entry : r) : [entry, ...prev]);
+                setModal(null);
+            };
+
+            const monthRecords = records.filter(r => getMonthKey(new Date(r.ts)) === viewMonth);
+            const monthStats = monthRecords.reduce((acc, r) => { acc[r.type] += r.amount; return acc; }, { income: 0, expense: 0 });
+            const totalBalance = initialBalance + records.reduce((s, r) => s + (r.type === "income" ? r.amount : -r.amount), 0);
+
+            const grouped = useMemo(() => {
+                const g = {};
+                monthRecords.forEach(r => {
+                    const k = getDateKey(new Date(r.ts));
+                    if (!g[k]) g[k] = [];
+                    g[k].push(r);
+                });
+                return Object.entries(g).sort((a, b) => b[0].localeCompare(a[0]));
+            }, [monthRecords]);
+
+            // 通用数字键盘组件
+            const Keyboard = ({ onKey }) => (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px", background: "#f2f2f2", padding: "12px", borderRadius: "20px" }}>
+                    {["1", "2", "3", "AC", "4", "5", "6", "+", "7", "8", "9", "-", ".", "0", "删除", "确定"].map(k => (
+                        <button key={k} onClick={() => onKey(k)} className={`num-btn ${k === '确定' ? 'primary-btn' : ''}`}>{k}</button>
+                    ))}
+                </div>
+            );
+
+            return (
+                <div style={{ paddingBottom: "40px" }}>
+                    {/* 顶部资产面板 */}
+                    <div style={{ background: "linear-gradient(135deg, #1a1a1a 0%, #434343 100%)", padding: "35px 25px", color: "#fff", borderRadius: "0 0 32px 32px", boxShadow: "0 10px 20px rgba(0,0,0,0.1)" }}>
+                        <div style={{ opacity: 0.6, fontSize: "12px", marginBottom: "8px" }}>当前资产净额</div>
+                        <div onClick={() => { setTempBal(String(initialBalance)); setModal("balance"); }} 
+                             style={{ fontSize: "38px", fontWeight: "800", cursor: "pointer", display: "inline-block" }}>
+                            {fmt(totalBalance)}
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginTop: "25px" }}>
+                            <button onClick={() => { setForm({ ...form, type: "income", id: null, amount: "0", category: allCats.income[0] }); setModal("record"); }} 
+                                style={{ padding: "14px", borderRadius: "14px", border: "none", background: "rgba(255,255,255,0.12)", color: "#fff", fontWeight: "600", cursor: "pointer" }}>＋ 记收入</button>
+                            <button onClick={() => { setForm({ ...form, type: "expense", id: null, amount: "0", category: allCats.expense[0] }); setModal("record"); }}
+                                style={{ padding: "14px", borderRadius: "14px", border: "none", background: "rgba(255,255,255,0.12)", color: "#fff", fontWeight: "600", cursor: "pointer" }}>－ 记支出</button>
+                        </div>
+                    </div>
+
+                    {/* 列表内容 */}
+                    <div style={{ padding: "20px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+                            <select value={viewMonth} onChange={e => setViewMonth(e.target.value)} style={{ border: "none", background: "none", fontSize: "20px", fontWeight: "800", color: "#1a1a1a", outline: "none" }}>
+                                <option value={getMonthKey(new Date())}>本月</option>
+                                {[...new Set(records.map(r => getMonthKey(new Date(r.ts))))].map(m => <option key={m} value={m}>{m.replace("-","年")}月</option>)}
+                            </select>
+                            <div style={{ fontSize: "12px", background: "#fff", padding: "4px 12px", borderRadius: "20px", color: "#666", boxShadow: "0 2px 6px rgba(0,0,0,0.02)" }}>
+                                收入 <span style={{ color: "#27ae60", fontWeight: "600" }}>{monthStats.income.toFixed(0)}</span> | 支出 <span style={{ color: "#e74c3c", fontWeight: "600" }}>{monthStats.expense.toFixed(0)}</span>
+                            </div>
+                        </div>
+
+                        {grouped.map(([date, items]) => (
+                            <div key={date} style={{ marginBottom: "24px" }}>
+                                <div style={{ fontSize: "12px", color: "#bbb", marginBottom: "10px", fontWeight: "600" }}>{date.split('-').slice(1).join('月')}日</div>
+                                <div style={{ background: "#fff", borderRadius: "18px", overflow: "hidden", boxShadow: "0 4px 15px rgba(0,0,0,0.02)" }}>
+                                    {items.map((item, idx) => (
+                                        <div key={item.id} onClick={() => { setForm({ ...item, date: getDateKey(new Date(item.ts)) }); setModal("record"); }}
+                                            style={{ display: "flex", alignItems: "center", padding: "16px", borderBottom: idx === items.length - 1 ? "none" : "1px solid #f9f9f9", cursor: "pointer" }}>
+                                            <div style={{ width: "42px", height: "42px", borderRadius: "14px", background: item.type === "income" ? "#eafaf1" : "#fff1f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "22px", marginRight: "14px" }}>
+                                                {item.icon}
+                                            </div>
+                                            <div style={{ flex: 1 }}>
+                                                <div style={{ fontSize: "15px", fontWeight: "600", color: "#333" }}>{item.desc}</div>
+                                                <div style={{ fontSize: "11px", color: "#ccc" }}>{item.category}</div>
+                                            </div>
+                                            <div style={{ fontWeight: "700", fontSize: "16px", color: item.type === "income" ? "#27ae60" : "#333" }}>
+                                                {item.type === "income" ? "+" : "-"}{item.amount.toFixed(2)}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* 记账面板 */}
+                    {modal === "record" && (
+                        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 100, display: "flex", flexDirection: "column-reverse" }}>
+                            <div style={{ background: "#fff", borderRadius: "28px 28px 0 0", padding: "25px", animation: "slideUp 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)" }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "20px" }}>
+                                    <div style={{ display: "flex", background: "#f0f0f0", borderRadius: "12px", padding: "4px" }}>
+                                        {["expense", "income"].map(t => (
+                                            <div key={t} onClick={() => setForm({ ...form, type: t, category: allCats[t][0] })}
+                                                style={{ padding: "8px 24px", borderRadius: "10px", fontSize: "14px", cursor: "pointer", background: form.type === t ? "#fff" : "transparent", fontWeight: form.type === t ? "700" : "400", boxShadow: form.type === t ? "0 2px 8px rgba(0,0,0,0.1)" : "none", transition: "0.2s" }}>
+                                                {t === "expense" ? "支出" : "收入"}
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <button onClick={() => {setModal(null); setCalcExpr("");}} style={{ border: "none", background: "none", fontSize: "24px", color: "#ccc", cursor: "pointer" }}>✕</button>
+                                </div>
+
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "20px" }}>
+                                    <input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} style={{ border: "none", background: "#f5f5f5", padding: "10px", borderRadius: "10px", fontSize: "14px", fontWeight: "600" }} />
+                                    <div style={{ textAlign: "right" }}>
+                                        <div style={{ fontSize: "13px", color: "#bbb", height: "18px" }}>{calcExpr}</div>
+                                        <div style={{ fontSize: "40px", fontWeight: "800", color: form.type === "income" ? "#27ae60" : "#e74c3c" }}>{form.amount}</div>
+                                    </div>
+                                </div>
+
+                                <div style={{ display: "flex", overflowX: "auto", gap: "16px", marginBottom: "20px", paddingBottom: "8px" }}>
+                                    {allCats[form.type].map(cat => (
+                                        <div key={cat.id} onClick={() => setForm({ ...form, category: cat })} style={{ flexShrink: 0, textAlign: "center", cursor: "pointer" }}>
+                                            <div style={{ width: "54px", height: "54px", borderRadius: "18px", background: form.category?.id === cat.id ? (form.type === "income" ? "#27ae60" : "#e74c3c") : "#f5f5f5", color: form.category?.id === cat.id ? "#fff" : "#333", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "26px", marginBottom: "6px", transition: "0.2s" }}>{cat.icon}</div>
+                                            <div style={{ fontSize: "11px", color: "#888", fontWeight: form.category?.id === cat.id ? "700" : "400" }}>{cat.name}</div>
+                                        </div>
+                                    ))}
+                                    <div onClick={() => setModal("manageCats")} style={{ width: "54px", height: "54px", borderRadius: "18px", border: "2px dashed #eee", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "24px", color: "#ddd", cursor: "pointer" }}>＋</div>
+                                </div>
+
+                                <input placeholder="添加备注描述..." value={form.desc} onChange={e => setForm({ ...form, desc: e.target.value })} style={{ width: "100%", padding: "15px", background: "#f8f8f8", border: "none", borderRadius: "15px", marginBottom: "20px", boxSizing: "border-box", fontSize: "15px", outline: "none" }} />
+
+                                <Keyboard onKey={(k) => onKeyboardInput(k, form.amount, (v) => setForm(prev => ({ ...prev, amount: typeof v === 'function' ? v(prev.amount) : v })), (final) => submitRecord(final))} />
+                                {form.id && <button onClick={() => { setRecords(r => r.filter(x => x.id !== form.id)); setModal(null); }} style={{ width: "100%", background: "none", border: "none", color: "#ff4d4f", marginTop: "15px", fontSize: "14px", cursor: "pointer" }}>删除记录</button>}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 设置初始金额面板 */}
+                    {modal === "balance" && (
+                        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 100, display: "flex", flexDirection: "column-reverse" }}>
+                            <div style={{ background: "#fff", borderRadius: "28px 28px 0 0", padding: "25px", animation: "slideUp 0.3s" }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "30px" }}>
+                                    <div>
+                                        <h3 style={{ margin: 0, fontSize: "18px" }}>设置初始资产</h3>
+                                        <p style={{ margin: "4px 0 0", fontSize: "12px", color: "#999" }}>输入记账起始日的实际存款总额</p>
+                                    </div>
+                                    <button onClick={() => {setModal(null); setCalcExpr("");}} style={{ border: "none", background: "none", fontSize: "24px", color: "#ccc" }}>✕</button>
+                                </div>
+
+                                <div style={{ textAlign: "center", marginBottom: "30px" }}>
+                                    <div style={{ fontSize: "14px", color: "#bbb", height: "20px" }}>{calcExpr}</div>
+                                    <div style={{ fontSize: "48px", fontWeight: "800", color: "#1a1a1a" }}>{tempBal}</div>
+                                </div>
+
+                                <Keyboard onKey={(k) => onKeyboardInput(k, tempBal, setTempBal, (final) => { setInitialBalance(final); setModal(null); })} />
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 分类管理 (略...) */}
+                    {modal === "manageCats" && (
+                        <div style={{ position: "fixed", inset: 0, background: "#fff", zIndex: 200, padding: "24px" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "32px" }}>
+                                <h3 style={{ margin: 0 }}>分类管理</h3>
+                                <button onClick={() => setModal("record")} style={{ border: "none", background: "#f0f0f0", padding: "8px 20px", borderRadius: "20px", fontWeight: "600" }}>完成</button>
+                            </div>
+                            <div style={{ background: "#f8f8f8", padding: "20px", borderRadius: "20px", marginBottom: "30px" }}>
+                                <div style={{ fontSize: "12px", color: "#999", marginBottom: "12px" }}>新增{form.type === 'income' ? '收入' : '支出'}分类</div>
+                                <div style={{ display: "flex", gap: "10px" }}>
+                                    <select id="newCatIcon" style={{ fontSize: "22px", padding: "10px", borderRadius: "12px", border: "1px solid #eee", background: "#fff" }}>
+                                        {ICON_OPTIONS.map(i => <option key={i}>{i}</option>)}
+                                    </select>
+                                    <input id="newCatName" placeholder="名称" style={{ flex: 1, padding: "10px", borderRadius: "12px", border: "1px solid #eee", outline: "none" }} />
+                                    <button onClick={() => { 
+                                        const name = document.getElementById('newCatName').value;
+                                        const icon = document.getElementById('newCatIcon').value;
+                                        if(!name) return;
+                                        setCustomCats(prev => ({ ...prev, [form.type]: [...prev[form.type], { id: Date.now(), name, icon }] }));
+                                        document.getElementById('newCatName').value = "";
+                                    }} style={{ background: "#1a1a1a", color: "#fff", border: "none", padding: "0 20px", borderRadius: "12px", fontWeight: "600" }}>添加</button>
+                                </div>
+                            </div>
+                            <div style={{ overflowY: "auto", maxHeight: "60vh" }}>
+                                {customCats[form.type].map(c => (
+                                    <div key={c.id} style={{ display: "flex", justifyContent: "space-between", padding: "16px 0", borderBottom: "1px solid #f5f5f5" }}>
+                                        <span style={{ fontSize: "16px" }}>{c.icon} {c.name}</span>
+                                        <button onClick={() => setCustomCats(p => ({ ...p, [form.type]: p[form.type].filter(x => x.id !== c.id) }))} style={{ color: "#ff4d4f", border: "none", background: "none", fontWeight: "600" }}>删除</button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
