@@ -27,6 +27,33 @@
         .month-dropdown-item { padding: 13px 20px; font-size: 15px; font-weight: 600; color: #1a1a1a; cursor: pointer; transition: background 0.15s; }
         .month-dropdown-item:hover { background: #f5f5f5; }
         .month-dropdown-item.active { background: #1a1a1a; color: #fff; }
+
+        /* 隐藏金额时的遮罩效果 */
+        .balance-blur {
+            filter: blur(8px);
+            user-select: none;
+            transition: filter 0.3s ease;
+        }
+        .balance-visible {
+            filter: none;
+            transition: filter 0.3s ease;
+        }
+        /* 眼睛按钮 */
+        .eye-btn {
+            background: rgba(255,255,255,0.15);
+            border: none;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background 0.2s;
+            padding: 0;
+            flex-shrink: 0;
+        }
+        .eye-btn:active { background: rgba(255,255,255,0.25); }
     </style>
 </head>
 <body>
@@ -129,7 +156,6 @@
                             <button onClick={onClose} style={{ border: "none", background: "#f0f0f0", padding: "6px 16px", borderRadius: "20px", fontWeight: "600", cursor: "pointer", fontSize: "13px" }}>完成</button>
                         </div>
 
-                        {/* 新增分类区域 */}
                         <div style={{ background: "#f8f8f8", padding: "16px", borderRadius: "16px", marginBottom: "16px" }}>
                             <div style={{ fontSize: "11px", color: "#999", marginBottom: "10px" }}>新增{form.type === "income" ? "收入" : "支出"}分类</div>
                             <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: showIconGrid ? "10px" : "0" }}>
@@ -153,7 +179,6 @@
                             )}
                         </div>
 
-                        {/* 已有自定义分类列表 */}
                         <div style={{ overflowY: "auto", flex: 1 }}>
                             {customCats[form.type].length === 0 && (
                                 <div style={{ textAlign: "center", color: "#ccc", fontSize: "13px", padding: "20px 0" }}>暂无自定义分类</div>
@@ -170,25 +195,38 @@
             );
         }
 
+        // ── 眼睛图标 SVG ──
+        function EyeIcon({ open }) {
+            return open ? (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.85)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                </svg>
+            ) : (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.85)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                    <line x1="1" y1="1" x2="23" y2="23"/>
+                </svg>
+            );
+        }
 
         const fmt = (n) => "¥" + Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2 });
         const getMonthKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
         const getDateKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
         function App() {
-            // --- 数据持久化状态 ---
             const [records, setRecords] = useState(() => JSON.parse(localStorage.getItem('records')) || []);
             const [initialBalance, setInitialBalance] = useState(() => Number(localStorage.getItem('initBal')) || 0);
             const [customCats, setCustomCats] = useState(() => JSON.parse(localStorage.getItem('customCats')) || { income: [], expense: [] });
             
-            // --- UI 状态 ---
-            const [modal, setModal] = useState(null); // 'record' | 'balance' | 'manageCats'
+            const [modal, setModal] = useState(null);
             const [viewMonth, setViewMonth] = useState(getMonthKey(new Date()));
             const [calcExpr, setCalcExpr] = useState("");
+            // ── 新增：隐藏资产状态 ──
+            const [balanceHidden, setBalanceHidden] = useState(() => localStorage.getItem('balHidden') === 'true');
 
-            // 记账表单
             const [form, setForm] = useState({ id: null, type: "expense", amount: "0", category: null, desc: "", date: getDateKey(new Date()) });
-            // 初始金额设置表单
             const [tempBal, setTempBal] = useState("0");
 
             const allCats = useMemo(() => ({
@@ -199,8 +237,8 @@
             useEffect(() => localStorage.setItem('records', JSON.stringify(records)), [records]);
             useEffect(() => localStorage.setItem('initBal', initialBalance), [initialBalance]);
             useEffect(() => localStorage.setItem('customCats', JSON.stringify(customCats)), [customCats]);
+            useEffect(() => localStorage.setItem('balHidden', balanceHidden), [balanceHidden]);
 
-            // --- 核心计算器逻辑 (复用型) ---
             const onKeyboardInput = (key, currentVal, setVal, onConfirm) => {
                 if (/[0-9.]/.test(key)) {
                     setVal(v => (v === "0" && key !== "." ? key : v + key));
@@ -257,7 +295,6 @@
                 return Object.entries(g).sort((a, b) => b[0].localeCompare(a[0]));
             }, [monthRecords]);
 
-            // 通用数字键盘组件
             const Keyboard = ({ onKey }) => (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "6px", background: "#f2f2f2", padding: "10px", borderRadius: "16px" }}>
                     {["1", "2", "3", "AC", "4", "5", "6", "+", "7", "8", "9", "-", ".", "0", "删除", "确定"].map(k => (
@@ -275,16 +312,32 @@
             }, [records]);
             const monthLabel = (m) => m === getMonthKey(new Date()) ? "本月" : m.replace("-", "年") + "月";
 
+            // ── 计算每日收支合计 ──
+            const getDailyStats = (items) => {
+                return items.reduce((acc, r) => {
+                    acc[r.type] += r.amount;
+                    return acc;
+                }, { income: 0, expense: 0 });
+            };
+
             return (
                 <div style={{ paddingBottom: "40px" }} onClick={() => showMonthPicker && setShowMonthPicker(false)}>
                     {/* 顶部资产面板 */}
                     <div style={{ background: "linear-gradient(135deg, #1a1a1a 0%, #434343 100%)", padding: "35px 25px", color: "#fff", borderRadius: "0 0 32px 32px", boxShadow: "0 10px 20px rgba(0,0,0,0.1)" }}>
                         <div style={{ opacity: 0.6, fontSize: "12px", marginBottom: "8px" }}>当前资产净额</div>
-                        <div onClick={() => { setTempBal(String(initialBalance)); setModal("balance"); }} 
-                             style={{ fontSize: "38px", fontWeight: "800", cursor: "pointer", display: "inline-block" }}>
-                            {fmt(totalBalance)}
+                        {/* ── 资产数字行：金额 + 眼睛按钮 ── */}
+                        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "25px" }}>
+                            <div
+                                onClick={() => { if (!balanceHidden) { setTempBal(String(initialBalance)); setModal("balance"); } }}
+                                className={balanceHidden ? "balance-blur" : "balance-visible"}
+                                style={{ fontSize: "38px", fontWeight: "800", cursor: balanceHidden ? "default" : "pointer", lineHeight: 1 }}>
+                                {fmt(totalBalance)}
+                            </div>
+                            <button className="eye-btn" onClick={() => setBalanceHidden(v => !v)} title={balanceHidden ? "显示资产" : "隐藏资产"}>
+                                <EyeIcon open={!balanceHidden} />
+                            </button>
                         </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginTop: "25px" }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
                             <button onClick={() => { setForm({ ...form, type: "income", id: null, amount: "0", category: allCats.income[0] }); setModal("record"); }} 
                                 style={{ padding: "14px", borderRadius: "14px", border: "none", background: "rgba(255,255,255,0.12)", color: "#fff", fontWeight: "600", cursor: "pointer" }}>＋ 记收入</button>
                             <button onClick={() => { setForm({ ...form, type: "expense", id: null, amount: "0", category: allCats.expense[0] }); setModal("record"); }}
@@ -295,7 +348,6 @@
                     {/* 列表内容 */}
                     <div style={{ padding: "20px" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-                            {/* 自定义月份选择器 */}
                             <div style={{ position: "relative" }} onClick={e => e.stopPropagation()}>
                                 <div onClick={() => setShowMonthPicker(v => !v)}
                                     style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", userSelect: "none" }}>
@@ -320,28 +372,66 @@
                             </div>
                         </div>
 
-                        {grouped.map(([date, items]) => (
-                            <div key={date} style={{ marginBottom: "24px" }}>
-                                <div style={{ fontSize: "12px", color: "#bbb", marginBottom: "10px", fontWeight: "600" }}>{date.split('-').slice(1).join('月')}日</div>
-                                <div style={{ background: "#fff", borderRadius: "18px", overflow: "hidden", boxShadow: "0 4px 15px rgba(0,0,0,0.02)" }}>
-                                    {items.map((item, idx) => (
-                                        <div key={item.id} onClick={() => { setForm({ ...item, date: getDateKey(new Date(item.ts)) }); setModal("record"); }}
-                                            style={{ display: "flex", alignItems: "center", padding: "16px", borderBottom: idx === items.length - 1 ? "none" : "1px solid #f9f9f9", cursor: "pointer" }}>
-                                            <div style={{ width: "42px", height: "42px", borderRadius: "14px", background: item.type === "income" ? "#eafaf1" : "#fff1f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "22px", marginRight: "14px" }}>
-                                                {item.icon}
-                                            </div>
-                                            <div style={{ flex: 1 }}>
-                                                <div style={{ fontSize: "15px", fontWeight: "600", color: "#333" }}>{item.desc}</div>
-                                                <div style={{ fontSize: "11px", color: "#ccc" }}>{item.category}</div>
-                                            </div>
-                                            <div style={{ fontWeight: "700", fontSize: "16px", color: item.type === "income" ? "#27ae60" : "#333" }}>
-                                                {item.type === "income" ? "+" : "-"}{item.amount.toFixed(2)}
-                                            </div>
+                        {grouped.map(([date, items]) => {
+                            // ── 计算当日合计 ──
+                            const daily = getDailyStats(items);
+                            const dailyNet = daily.income - daily.expense;
+
+                            return (
+                                <div key={date} style={{ marginBottom: "24px" }}>
+                                    {/* ── 日期行：左侧日期 + 右侧每日收支合计 ── */}
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                                        <div style={{ fontSize: "12px", color: "#bbb", fontWeight: "600" }}>
+                                            {date.split('-').slice(1).join('月')}日
                                         </div>
-                                    ))}
+                                        {/* 每日合计区域 */}
+                                        <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px" }}>
+                                            {daily.income > 0 && (
+                                                <span style={{ color: "#27ae60", fontWeight: "600" }}>
+                                                    +{daily.income.toFixed(2)}
+                                                </span>
+                                            )}
+                                            {daily.expense > 0 && (
+                                                <span style={{ color: "#e74c3c", fontWeight: "600" }}>
+                                                    -{daily.expense.toFixed(2)}
+                                                </span>
+                                            )}
+                                            {/* 净额（仅当同时有收支时才显示） */}
+                                            {daily.income > 0 && daily.expense > 0 && (
+                                                <span style={{
+                                                    color: dailyNet >= 0 ? "#27ae60" : "#e74c3c",
+                                                    fontWeight: "700",
+                                                    background: dailyNet >= 0 ? "#eafaf1" : "#fff1f0",
+                                                    padding: "2px 8px",
+                                                    borderRadius: "20px",
+                                                    fontSize: "11px"
+                                                }}>
+                                                    {dailyNet >= 0 ? "+" : ""}{dailyNet.toFixed(2)}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div style={{ background: "#fff", borderRadius: "18px", overflow: "hidden", boxShadow: "0 4px 15px rgba(0,0,0,0.02)" }}>
+                                        {items.map((item, idx) => (
+                                            <div key={item.id} onClick={() => { setForm({ ...item, date: getDateKey(new Date(item.ts)) }); setModal("record"); }}
+                                                style={{ display: "flex", alignItems: "center", padding: "16px", borderBottom: idx === items.length - 1 ? "none" : "1px solid #f9f9f9", cursor: "pointer" }}>
+                                                <div style={{ width: "42px", height: "42px", borderRadius: "14px", background: item.type === "income" ? "#eafaf1" : "#fff1f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "22px", marginRight: "14px" }}>
+                                                    {item.icon}
+                                                </div>
+                                                <div style={{ flex: 1 }}>
+                                                    <div style={{ fontSize: "15px", fontWeight: "600", color: "#333" }}>{item.desc}</div>
+                                                    <div style={{ fontSize: "11px", color: "#ccc" }}>{item.category}</div>
+                                                </div>
+                                                <div style={{ fontWeight: "700", fontSize: "16px", color: item.type === "income" ? "#27ae60" : "#333" }}>
+                                                    {item.type === "income" ? "+" : "-"}{item.amount.toFixed(2)}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
 
                     {/* 记账面板 */}
@@ -387,7 +477,6 @@
                                 {form.id && <button onClick={() => { setRecords(r => r.filter(x => x.id !== form.id)); setModal(null); }} style={{ width: "100%", background: "none", border: "none", color: "#ff4d4f", marginTop: "15px", fontSize: "14px", cursor: "pointer" }}>删除记录</button>}
                             </div>
 
-                            {/* 日期选择器 — 悬浮在记账面板上 */}
                             {modal === "datePicker" && (
                                 <DatePickerModal
                                     value={form.date}
@@ -396,7 +485,6 @@
                                 />
                             )}
 
-                            {/* 分类管理 — 悬浮在记账面板上 */}
                             {modal === "manageCats" && (
                                 <ManageCatsModal
                                     form={form}
