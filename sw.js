@@ -33,6 +33,13 @@ self.addEventListener('activate', (e) => {
 
 // 发起请求时：优先使用手机本地缓存，没网也能开
 self.addEventListener('fetch', (e) => {
+  const url = new URL(e.request.url);
+
+  // 非同源且不在 ASSETS 里的外部请求，直接放行不缓存
+  if (url.origin !== location.origin && !ASSETS.includes(e.request.url)) {
+    return;
+  }
+
   e.respondWith(
     caches.match(e.request).then((response) => {
       return response || fetch(e.request);
