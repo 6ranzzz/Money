@@ -1,14 +1,14 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>极简记账本 Pro</title>
+    <title>Budget Tracker Pro</title>
     <meta name="theme-color" content="#1a1a1a">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="记账">
+    <meta name="apple-mobile-web-app-title" content="Budget">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="icon-192.png">
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -46,12 +46,12 @@
         const { useState, useMemo, useEffect, useRef } = React;
 
         const DEFAULT_CATEGORIES = {
-            income: [{ id: "i1", name: "工资", icon: "💰" }, { id: "i2", name: "奖金", icon: "🎁" }, { id: "i3", name: "理财", icon: "📈" }],
-            expense: [{ id: "e1", name: "餐饮", icon: "🍜" }, { id: "e2", name: "购物", icon: "🛍️" }, { id: "e3", name: "交通", icon: "🚌" }, { id: "e4", name: "娱乐", icon: "🎮" }]
+            income: [{ id: "i1", name: "Salary", icon: "💰" }, { id: "i2", name: "Bonus", icon: "🎁" }, { id: "i3", name: "Investment", icon: "📈" }],
+            expense: [{ id: "e1", name: "Food", icon: "🍜" }, { id: "e2", name: "Shopping", icon: "🛍️" }, { id: "e3", name: "Transport", icon: "🚌" }, { id: "e4", name: "Entertainment", icon: "🎮" }]
         };
         const ICON_OPTIONS = ["💰","🎁","📈","💼","🧧","🍜","🛍️","🚌","🎮","💊","📚","✈️","🏠","💡","🍕","☕","🚗","🐶","🎨","📱","🛒","🎬","🌸"];
 
-        // ── 日期滚轮选择器 ──
+        // ── Date Picker Modal ──
         function DatePickerModal({ value, onConfirm, onClose }) {
             const now = new Date(value || Date.now());
             const [selY, setSelY] = React.useState(now.getFullYear());
@@ -88,21 +88,21 @@
                 <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.35)", zIndex: 10, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={onClose}>
                     <div style={{ background: "#fff", borderRadius: "24px", padding: "24px", width: "300px", animation: "fadeInDown 0.2s ease", margin: "20px" }} onClick={e => e.stopPropagation()}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-                            <span style={{ fontSize: "16px", fontWeight: "700" }}>选择日期</span>
+                            <span style={{ fontSize: "16px", fontWeight: "700" }}>Select Date</span>
                             <button onClick={onClose} style={{ border: "none", background: "none", fontSize: "20px", color: "#ccc", cursor: "pointer" }}>✕</button>
                         </div>
                         <div style={{ display: "flex", gap: "4px" }}>
-                            <ScrollCol items={years} selected={selY} onSelect={setSelY} fmt={v => v + "年"} />
-                            <ScrollCol items={months} selected={selM} onSelect={setSelM} fmt={v => String(v).padStart(2,"0") + "月"} />
-                            <ScrollCol items={days} selected={selD} onSelect={setSelD} fmt={v => String(v).padStart(2,"0") + "日"} />
+                            <ScrollCol items={years} selected={selY} onSelect={setSelY} fmt={v => v + ""} />
+                            <ScrollCol items={months} selected={selM} onSelect={setSelM} fmt={v => String(v).padStart(2,"0")} />
+                            <ScrollCol items={days} selected={selD} onSelect={setSelD} fmt={v => String(v).padStart(2,"0")} />
                         </div>
-                        <button onClick={confirm} style={{ width: "100%", marginTop: "20px", background: "#1a1a1a", color: "#fff", border: "none", padding: "14px", borderRadius: "14px", fontSize: "15px", fontWeight: "700", cursor: "pointer" }}>确定</button>
+                        <button onClick={confirm} style={{ width: "100%", marginTop: "20px", background: "#1a1a1a", color: "#fff", border: "none", padding: "14px", borderRadius: "14px", fontSize: "15px", fontWeight: "700", cursor: "pointer" }}>Confirm</button>
                     </div>
                 </div>
             );
         }
 
-        // ── 年份选择器（图表用）──
+        // ── Year Picker Modal (for chart) ──
         function YearPickerModal({ value, onConfirm, onClose }) {
             const years = Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 4 + i);
             const [selY, setSelY] = React.useState(value);
@@ -114,7 +114,7 @@
                 <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 300, display: "flex", alignItems: "flex-end" }} onClick={onClose}>
                     <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", padding: "24px", width: "100%", maxWidth: "480px", margin: "0 auto", animation: "slideUp 0.3s" }} onClick={e => e.stopPropagation()}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-                            <span style={{ fontSize: "16px", fontWeight: "700" }}>选择年份</span>
+                            <span style={{ fontSize: "16px", fontWeight: "700" }}>Select Year</span>
                             <button onClick={onClose} style={{ border: "none", background: "none", fontSize: "20px", color: "#ccc", cursor: "pointer" }}>✕</button>
                         </div>
                         <div style={{ position: "relative" }}>
@@ -124,19 +124,19 @@
                                 {years.map(y => (
                                     <div key={y} onClick={() => { setSelY(y); ref.current.scrollTo({ top: years.indexOf(y) * ITEM_H, behavior: "smooth" }); }}
                                         style={{ height: ITEM_H, display: "flex", alignItems: "center", justifyContent: "center", scrollSnapAlign: "center", fontSize: "20px", fontWeight: y === selY ? "800" : "400", color: y === selY ? "#1a1a1a" : "#bbb", transition: "0.15s", cursor: "pointer" }}>
-                                        {y}年
+                                        {y}
                                     </div>
                                 ))}
                                 <div style={{ height: ITEM_H * 2 }} />
                             </div>
                         </div>
-                        <button onClick={() => onConfirm(selY)} style={{ width: "100%", marginTop: "20px", background: "#1a1a1a", color: "#fff", border: "none", padding: "14px", borderRadius: "14px", fontSize: "15px", fontWeight: "700", cursor: "pointer" }}>确定</button>
+                        <button onClick={() => onConfirm(selY)} style={{ width: "100%", marginTop: "20px", background: "#1a1a1a", color: "#fff", border: "none", padding: "14px", borderRadius: "14px", fontSize: "15px", fontWeight: "700", cursor: "pointer" }}>Confirm</button>
                     </div>
                 </div>
             );
         }
 
-        // ── 分类管理浮窗 ──
+        // ── Category Management Modal ──
         function ManageCatsModal({ form, customCats, setCustomCats, onClose }) {
             const [selIcon, setSelIcon] = React.useState(ICON_OPTIONS[0]);
             const [catName, setCatName] = React.useState("");
@@ -150,15 +150,15 @@
                 <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.35)", zIndex: 10, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }} onClick={onClose}>
                     <div style={{ background: "#fff", borderRadius: "24px", padding: "24px", width: "100%", maxWidth: "340px", maxHeight: "80vh", display: "flex", flexDirection: "column", animation: "fadeInDown 0.2s ease" }} onClick={e => e.stopPropagation()}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-                            <span style={{ fontSize: "16px", fontWeight: "700" }}>分类管理</span>
-                            <button onClick={onClose} style={{ border: "none", background: "#f0f0f0", padding: "6px 16px", borderRadius: "20px", fontWeight: "600", cursor: "pointer", fontSize: "13px" }}>完成</button>
+                            <span style={{ fontSize: "16px", fontWeight: "700" }}>Manage Categories</span>
+                            <button onClick={onClose} style={{ border: "none", background: "#f0f0f0", padding: "6px 16px", borderRadius: "20px", fontWeight: "600", cursor: "pointer", fontSize: "13px" }}>Done</button>
                         </div>
                         <div style={{ background: "#f8f8f8", padding: "16px", borderRadius: "16px", marginBottom: "16px" }}>
-                            <div style={{ fontSize: "11px", color: "#999", marginBottom: "10px" }}>新增{form.type === "income" ? "收入" : "支出"}分类</div>
+                            <div style={{ fontSize: "11px", color: "#999", marginBottom: "10px" }}>Add {form.type === "income" ? "Income" : "Expense"} Category</div>
                             <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: showIconGrid ? "10px" : "0" }}>
                                 <div onClick={() => setShowIconGrid(v => !v)} style={{ width: "44px", height: "44px", borderRadius: "12px", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "22px", cursor: "pointer", border: showIconGrid ? "2px solid #1a1a1a" : "2px solid transparent", flexShrink: 0 }}>{selIcon}</div>
-                                <input value={catName} onChange={e => setCatName(e.target.value)} placeholder="分类名称" style={{ flex: 1, padding: "10px 12px", borderRadius: "12px", border: "1px solid #eee", outline: "none", fontSize: "14px", background: "#fff" }} />
-                                <button onClick={addCat} style={{ background: "#1a1a1a", color: "#fff", border: "none", padding: "10px 14px", borderRadius: "12px", fontWeight: "600", fontSize: "13px", cursor: "pointer", flexShrink: 0 }}>添加</button>
+                                <input value={catName} onChange={e => setCatName(e.target.value)} placeholder="Category name" style={{ flex: 1, padding: "10px 12px", borderRadius: "12px", border: "1px solid #eee", outline: "none", fontSize: "14px", background: "#fff" }} />
+                                <button onClick={addCat} style={{ background: "#1a1a1a", color: "#fff", border: "none", padding: "10px 14px", borderRadius: "12px", fontWeight: "600", fontSize: "13px", cursor: "pointer", flexShrink: 0 }}>Add</button>
                             </div>
                             {showIconGrid && (
                                 <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "6px" }}>
@@ -169,11 +169,11 @@
                             )}
                         </div>
                         <div style={{ overflowY: "auto", flex: 1 }}>
-                            {customCats[form.type].length === 0 && <div style={{ textAlign: "center", color: "#ccc", fontSize: "13px", padding: "20px 0" }}>暂无自定义分类</div>}
+                            {customCats[form.type].length === 0 && <div style={{ textAlign: "center", color: "#ccc", fontSize: "13px", padding: "20px 0" }}>No custom categories yet</div>}
                             {customCats[form.type].map(c => (
                                 <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: "1px solid #f5f5f5" }}>
                                     <span style={{ fontSize: "15px" }}>{c.icon} {c.name}</span>
-                                    <button onClick={() => setCustomCats(p => ({ ...p, [form.type]: p[form.type].filter(x => x.id !== c.id) }))} style={{ color: "#ff4d4f", border: "none", background: "none", fontWeight: "600", fontSize: "13px", cursor: "pointer" }}>删除</button>
+                                    <button onClick={() => setCustomCats(p => ({ ...p, [form.type]: p[form.type].filter(x => x.id !== c.id) }))} style={{ color: "#ff4d4f", border: "none", background: "none", fontWeight: "600", fontSize: "13px", cursor: "pointer" }}>Delete</button>
                                 </div>
                             ))}
                         </div>
@@ -196,7 +196,7 @@
             );
         }
 
-        // ── 单线折线图 ──
+        // ── Single Line Chart ──
         function LineChart({ data, type, animKey }) {
             const [tooltip, setTooltip] = useState(null);
             const W = 320, H = 180;
@@ -207,7 +207,7 @@
             const fillColor = type === "income" ? "rgba(39,174,96,0.1)" : "rgba(231,76,60,0.1)";
 
             if (!data || data.every(d => d.value === 0)) {
-                return <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: H, color: "#ccc", fontSize: "13px" }}>该年度暂无数据</div>;
+                return <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: H, color: "#ccc", fontSize: "13px" }}>No data for this year</div>;
             }
 
             const maxVal = Math.max(...data.map(d => d.value), 1);
@@ -218,7 +218,7 @@
             }));
             const polyline = pts.map(p => `${p.x},${p.y}`).join(" ");
             const area = `M${pts[0].x},${PAD.top+cH} ${pts.map(p=>`L${p.x},${p.y}`).join(" ")} L${pts[pts.length-1].x},${PAD.top+cH} Z`;
-            const yTicks = [0,0.5,1].map(r => ({ y: PAD.top + cH - r*cH, label: (r*maxVal)>=10000?((r*maxVal)/10000).toFixed(1)+"w":Math.round(r*maxVal).toString() }));
+            const yTicks = [0,0.5,1].map(r => ({ y: PAD.top + cH - r*cH, label: (r*maxVal)>=10000?((r*maxVal)/10000).toFixed(1)+"k":Math.round(r*maxVal).toString() }));
 
             return (
                 <div style={{ position: "relative" }} key={animKey}>
@@ -256,7 +256,7 @@
             );
         }
 
-        // ── 收支对比双线图 ──
+        // ── Income vs Expense Dual Line Chart ──
         function BothChart({ incomeData, expenseData, animKey }) {
             const [tooltip, setTooltip] = useState(null);
             const W = 320, H = 180;
@@ -267,18 +267,18 @@
             const maxVal = Math.max(...allVals, 1);
             const makePts = (data) => data.map((d,i) => ({ x: PAD.left+(i/(data.length-1))*cW, y: PAD.top+cH-(d.value/maxVal)*cH, ...d }));
             const iPts = makePts(incomeData), ePts = makePts(expenseData);
-            const yTicks = [0,0.5,1].map(r => ({ y: PAD.top+cH-r*cH, label: (r*maxVal)>=10000?((r*maxVal)/10000).toFixed(1)+"w":Math.round(r*maxVal).toString() }));
+            const yTicks = [0,0.5,1].map(r => ({ y: PAD.top+cH-r*cH, label: (r*maxVal)>=10000?((r*maxVal)/10000).toFixed(1)+"k":Math.round(r*maxVal).toString() }));
             const hasAny = allVals.some(v => v > 0);
-            if (!hasAny) return <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:H, color:"#ccc", fontSize:"13px" }}>该年度暂无数据</div>;
+            if (!hasAny) return <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:H, color:"#ccc", fontSize:"13px" }}>No data for this year</div>;
 
             return (
                 <div key={animKey}>
                     <div style={{ display:"flex", gap:"16px", marginBottom:"10px" }}>
                         <div style={{ display:"flex", alignItems:"center", gap:"6px", fontSize:"11px", color:"#27ae60", fontWeight:"600" }}>
-                            <div style={{ width:"18px", height:"2.5px", background:"#27ae60", borderRadius:"2px" }}/> 收入
+                            <div style={{ width:"18px", height:"2.5px", background:"#27ae60", borderRadius:"2px" }}/> Income
                         </div>
                         <div style={{ display:"flex", alignItems:"center", gap:"6px", fontSize:"11px", color:"#e74c3c", fontWeight:"600" }}>
-                            <svg width="18" height="4"><line x1="0" y1="2" x2="18" y2="2" stroke="#e74c3c" strokeWidth="2.5" strokeDasharray="5 3"/></svg> 支出
+                            <svg width="18" height="4"><line x1="0" y1="2" x2="18" y2="2" stroke="#e74c3c" strokeWidth="2.5" strokeDasharray="5 3"/></svg> Expense
                         </div>
                     </div>
                     <svg viewBox={`0 0 ${W} ${H}`} style={{ width:"100%", overflow:"visible" }} onMouseLeave={() => setTooltip(null)}>
@@ -310,7 +310,7 @@
             );
         }
 
-        // ── 统计图表页面 ──
+        // ── Chart / Statistics Page ──
         function ChartPage({ records, onClose }) {
             const [chartType, setChartType] = useState("expense");
             const [selYear, setSelYear] = useState(new Date().getFullYear());
@@ -322,7 +322,7 @@
 
             const monthlyData = useMemo(() => {
                 const map = {};
-                for (let m=1; m<=12; m++) map[`${selYear}-${String(m).padStart(2,"0")}`] = { income:0, expense:0, month:m };
+                for (let m=1; m<=12; m++) map[`${selYear}-${String(m).padStart(2,"00")}`] = { income:0, expense:0, month:m };
                 records.forEach(r => {
                     const d = new Date(r.ts);
                     if (d.getFullYear() !== selYear) return;
@@ -332,14 +332,17 @@
                 return Object.values(map).sort((a,b)=>a.month-b.month);
             }, [records, selYear]);
 
-            const incomeData = monthlyData.map(d => ({ label:`${d.month}月`, value:d.income }));
-            const expenseData = monthlyData.map(d => ({ label:`${d.month}月`, value:d.expense }));
-            const yearIncome = monthlyData.reduce((s,d)=>s+d.income,0);
+            const MONTH_LABELS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+            const MONTH_NAMES  = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+            const incomeData  = monthlyData.map(d => ({ label: MONTH_LABELS[d.month-1], value: d.income }));
+            const expenseData = monthlyData.map(d => ({ label: MONTH_LABELS[d.month-1], value: d.expense }));
+            const yearIncome  = monthlyData.reduce((s,d)=>s+d.income,0);
             const yearExpense = monthlyData.reduce((s,d)=>s+d.expense,0);
             const yearNet = yearIncome - yearExpense;
-            const peakIncome = [...monthlyData].sort((a,b)=>b.income-a.income)[0];
+            const peakIncome  = [...monthlyData].sort((a,b)=>b.income-a.income)[0];
             const peakExpense = [...monthlyData].sort((a,b)=>b.expense-a.expense)[0];
-            const fmt2 = n => n>=10000?(n/10000).toFixed(2)+"w":n.toFixed(0);
+            const fmt2 = n => n>=10000?(n/10000).toFixed(2)+"k":n.toFixed(0);
 
             return (
                 <div style={{ position:"fixed", inset:0, background:"#F8F9FD", zIndex:150, maxWidth:"480px", margin:"0 auto", overflowY:"auto", animation:"slideInRight 0.28s ease" }}>
@@ -348,19 +351,19 @@
                         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"22px" }}>
                             <button onClick={onClose} style={{ background:"rgba(255,255,255,0.15)", border:"none", borderRadius:"12px", padding:"8px 14px", color:"#fff", fontSize:"14px", fontWeight:"600", cursor:"pointer", display:"flex", alignItems:"center", gap:"6px" }}>
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
-                                返回
+                                Back
                             </button>
                             <button onClick={() => setShowYearPicker(true)} style={{ display:"flex", alignItems:"center", gap:"6px", cursor:"pointer", background:"rgba(255,255,255,0.12)", border:"none", padding:"8px 16px", borderRadius:"12px", color:"#fff" }}>
-                                <span style={{ fontSize:"16px", fontWeight:"700" }}>{selYear}年</span>
+                                <span style={{ fontSize:"16px", fontWeight:"700" }}>{selYear}</span>
                                 <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M3 5l4 4 4-4" stroke="rgba(255,255,255,0.8)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
                             </button>
                         </div>
-                        {/* 年度汇总 */}
+                        {/* Annual Summary */}
                         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"10px" }}>
                             {[
-                                { label:"年度收入", val:yearIncome, color:"#4eca7f" },
-                                { label:"年度支出", val:yearExpense, color:"#ff6b6b" },
-                                { label:"年度结余", val:yearNet, color:yearNet>=0?"#4eca7f":"#ff6b6b", sign:true }
+                                { label:"Annual Income",  val:yearIncome,  color:"#4eca7f" },
+                                { label:"Annual Expense", val:yearExpense, color:"#ff6b6b" },
+                                { label:"Net Savings",    val:yearNet,     color:yearNet>=0?"#4eca7f":"#ff6b6b", sign:true }
                             ].map((c,i) => (
                                 <div key={i} style={{ background:"rgba(255,255,255,0.1)", borderRadius:"16px", padding:"14px 10px" }}>
                                     <div style={{ fontSize:"10px", opacity:0.6, marginBottom:"6px" }}>{c.label}</div>
@@ -373,9 +376,9 @@
                     </div>
 
                     <div style={{ padding:"20px" }}>
-                        {/* 收入/支出/对比 Tab */}
+                        {/* Expense / Income / Both Tab */}
                         <div style={{ display:"flex", background:"#fff", borderRadius:"16px", padding:"5px", gap:"4px", marginBottom:"16px", boxShadow:"0 4px 15px rgba(0,0,0,0.04)" }}>
-                            {[{key:"expense",label:"支出",color:"#e74c3c"},{key:"income",label:"收入",color:"#27ae60"},{key:"both",label:"收支对比",color:"#1a1a1a"}].map(t => (
+                            {[{key:"expense",label:"Expense",color:"#e74c3c"},{key:"income",label:"Income",color:"#27ae60"},{key:"both",label:"Compare",color:"#1a1a1a"}].map(t => (
                                 <button key={t.key} className="tab-btn" onClick={() => switchType(t.key)}
                                     style={{ background:chartType===t.key?t.color:"transparent", color:chartType===t.key?"#fff":"#999" }}>
                                     {t.label}
@@ -383,10 +386,10 @@
                             ))}
                         </div>
 
-                        {/* 图表卡片 */}
+                        {/* Chart Card */}
                         <div style={{ background:"#fff", borderRadius:"20px", padding:"20px 16px 12px", marginBottom:"16px", boxShadow:"0 4px 20px rgba(0,0,0,0.04)" }}>
                             <div style={{ fontSize:"12px", color:"#bbb", fontWeight:"600", marginBottom:"14px" }}>
-                                {selYear}年 {chartType==="expense"?"月度支出":chartType==="income"?"月度收入":"收支对比"} 趋势
+                                {selYear} {chartType==="expense"?"Monthly Expense":chartType==="income"?"Monthly Income":"Income vs Expense"} Trend
                             </div>
                             {chartType==="both"
                                 ? <BothChart incomeData={incomeData} expenseData={expenseData} animKey={animKey}/>
@@ -394,14 +397,14 @@
                             }
                         </div>
 
-                        {/* 月度明细表 */}
+                        {/* Monthly Detail Table */}
                         <div style={{ background:"#fff", borderRadius:"20px", overflow:"hidden", boxShadow:"0 4px 20px rgba(0,0,0,0.04)", marginBottom:"16px" }}>
                             <div style={{ padding:"14px 18px 10px", display:"flex", justifyContent:"space-between", fontSize:"11px", color:"#bbb", fontWeight:"700", borderBottom:"1px solid #f5f5f5", letterSpacing:"0.5px" }}>
-                                <span>月份</span>
+                                <span>Month</span>
                                 <div style={{ display:"flex", gap:"12px" }}>
-                                    <span style={{ color:"#27ae60", minWidth:"52px", textAlign:"right" }}>收入</span>
-                                    <span style={{ color:"#e74c3c", minWidth:"52px", textAlign:"right" }}>支出</span>
-                                    <span style={{ minWidth:"56px", textAlign:"right" }}>结余</span>
+                                    <span style={{ color:"#27ae60", minWidth:"52px", textAlign:"right" }}>Income</span>
+                                    <span style={{ color:"#e74c3c", minWidth:"52px", textAlign:"right" }}>Expense</span>
+                                    <span style={{ minWidth:"56px", textAlign:"right" }}>Net</span>
                                 </div>
                             </div>
                             {monthlyData.map((d,i) => {
@@ -409,7 +412,7 @@
                                 const has = d.income>0||d.expense>0;
                                 return (
                                     <div key={i} style={{ padding:"11px 18px", display:"flex", justifyContent:"space-between", alignItems:"center", borderBottom:i<11?"1px solid #f9f9f9":"none", opacity:has?1:0.3 }}>
-                                        <span style={{ fontSize:"14px", fontWeight:"600", color:"#333" }}>{d.month}月</span>
+                                        <span style={{ fontSize:"14px", fontWeight:"600", color:"#333" }}>{MONTH_NAMES[d.month-1]}</span>
                                         <div style={{ display:"flex", gap:"12px" }}>
                                             <span style={{ fontSize:"12px", color:"#27ae60", fontWeight:"600", minWidth:"52px", textAlign:"right" }}>{d.income>0?`+${fmt2(d.income)}`:"—"}</span>
                                             <span style={{ fontSize:"12px", color:"#e74c3c", fontWeight:"600", minWidth:"52px", textAlign:"right" }}>{d.expense>0?`-${fmt2(d.expense)}`:"—"}</span>
@@ -422,20 +425,20 @@
                             })}
                         </div>
 
-                        {/* 峰值卡片 */}
+                        {/* Peak Cards */}
                         {(peakIncome.income>0||peakExpense.expense>0) && (
                             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"12px", marginBottom:"24px" }}>
                                 {peakIncome.income>0 && (
                                     <div style={{ background:"#eafaf1", borderRadius:"16px", padding:"16px" }}>
-                                        <div style={{ fontSize:"10px", color:"#27ae60", fontWeight:"700", marginBottom:"6px" }}>💰 收入最高月</div>
-                                        <div style={{ fontSize:"20px", fontWeight:"800", color:"#27ae60" }}>{peakIncome.month}月</div>
+                                        <div style={{ fontSize:"10px", color:"#27ae60", fontWeight:"700", marginBottom:"6px" }}>💰 Top Income Month</div>
+                                        <div style={{ fontSize:"20px", fontWeight:"800", color:"#27ae60" }}>{MONTH_NAMES[peakIncome.month-1]}</div>
                                         <div style={{ fontSize:"12px", color:"#27ae60", opacity:0.8 }}>¥{fmt2(peakIncome.income)}</div>
                                     </div>
                                 )}
                                 {peakExpense.expense>0 && (
                                     <div style={{ background:"#fff1f0", borderRadius:"16px", padding:"16px" }}>
-                                        <div style={{ fontSize:"10px", color:"#e74c3c", fontWeight:"700", marginBottom:"6px" }}>🛍️ 支出最高月</div>
-                                        <div style={{ fontSize:"20px", fontWeight:"800", color:"#e74c3c" }}>{peakExpense.month}月</div>
+                                        <div style={{ fontSize:"10px", color:"#e74c3c", fontWeight:"700", marginBottom:"6px" }}>🛍️ Top Expense Month</div>
+                                        <div style={{ fontSize:"20px", fontWeight:"800", color:"#e74c3c" }}>{MONTH_NAMES[peakExpense.month-1]}</div>
                                         <div style={{ fontSize:"12px", color:"#e74c3c", opacity:0.8 }}>¥{fmt2(peakExpense.expense)}</div>
                                     </div>
                                 )}
@@ -478,20 +481,20 @@
                 if (/[0-9.]/.test(key)) { setVal(v => v==="0"&&key!=="."?key:v+key); }
                 else if (["+","-","*","/"].includes(key)) { setCalcExpr(currentVal+key); setVal("0"); }
                 else if (key==="AC") { setVal("0"); setCalcExpr(""); }
-                else if (key==="删除") { setVal(v => v.length>1?v.slice(0,-1):"0"); }
-                else if (key==="确定"||key==="=") {
+                else if (key==="DEL") { setVal(v => v.length>1?v.slice(0,-1):"0"); }
+                else if (key==="OK"||key==="=") {
                     try {
                         const result = eval(calcExpr+currentVal);
                         const final = String(Math.max(-9999999,result).toFixed(2));
-                        if (key==="确定") { onConfirm(Number(final)); setCalcExpr(""); }
+                        if (key==="OK") { onConfirm(Number(final)); setCalcExpr(""); }
                         else { setVal(final); setCalcExpr(""); }
-                    } catch { alert("计算错误"); }
+                    } catch { alert("Calculation error"); }
                 }
             };
 
             const submitRecord = (finalAmt) => {
                 if (finalAmt===0 && Number(form.amount)===0) return;
-                const entry = { id:form.id||Date.now(), type:form.type, amount:Math.abs(finalAmt||Number(form.amount)), category:form.category?.name||"其他", icon:form.category?.icon||"📌", desc:form.desc||form.category?.name, ts:new Date(form.date).getTime() };
+                const entry = { id:form.id||Date.now(), type:form.type, amount:Math.abs(finalAmt||Number(form.amount)), category:form.category?.name||"Other", icon:form.category?.icon||"📌", desc:form.desc||form.category?.name, ts:new Date(form.date).getTime() };
                 setRecords(prev => form.id?prev.map(r=>r.id===form.id?entry:r):[entry,...prev]);
                 setModal(null);
             };
@@ -508,8 +511,8 @@
 
             const Keyboard = ({ onKey }) => (
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:"6px", background:"#f2f2f2", padding:"10px", borderRadius:"16px" }}>
-                    {["1","2","3","AC","4","5","6","+","7","8","9","-",".","0","删除","确定"].map(k => (
-                        <button key={k} onClick={() => onKey(k)} className={`num-btn ${k==='确定'?'primary-btn':''}`}>{k}</button>
+                    {["1","2","3","AC","4","5","6","+","7","8","9","-",".","0","DEL","OK"].map(k => (
+                        <button key={k} onClick={() => onKey(k)} className={`num-btn ${k==='OK'?'primary-btn':''}`}>{k}</button>
                     ))}
                 </div>
             );
@@ -520,18 +523,32 @@
                 const from = [...new Set(records.map(r=>getMonthKey(new Date(r.ts))))];
                 return [cur, ...from.filter(m=>m!==cur)];
             }, [records]);
-            const monthLabel = m => m===getMonthKey(new Date())?"本月":m.replace("-","年")+"月";
+
+            const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+            const monthLabel = m => {
+                const cur = getMonthKey(new Date());
+                if (m === cur) return "This Month";
+                const [y, mo] = m.split("-");
+                return `${MONTH_SHORT[Number(mo)-1]} ${y}`;
+            };
+
             const getDailyStats = items => items.reduce((acc,r)=>{ acc[r.type]+=r.amount; return acc; }, {income:0,expense:0});
+
+            // Format date key "YYYY-MM-DD" → "May 25"
+            const formatDateLabel = (dateStr) => {
+                const [, mo, dd] = dateStr.split("-");
+                return `${MONTH_SHORT[Number(mo)-1]} ${Number(dd)}`;
+            };
 
             return (
                 <div style={{ paddingBottom:"40px" }} onClick={() => showMonthPicker&&setShowMonthPicker(false)}>
 
-                    {/* 统计图表页面（全屏覆盖） */}
+                    {/* Statistics / Chart Page (full-screen overlay) */}
                     {showChart && <ChartPage records={records} onClose={() => setShowChart(false)}/>}
 
-                    {/* 顶部面板 */}
+                    {/* Top Panel */}
                     <div style={{ background:"linear-gradient(135deg,#1a1a1a 0%,#434343 100%)", padding:"35px 25px 25px", color:"#fff", borderRadius:"0 0 32px 32px", boxShadow:"0 10px 20px rgba(0,0,0,0.1)" }}>
-                        <div style={{ opacity:0.6, fontSize:"12px", marginBottom:"8px" }}>当前资产净额</div>
+                        <div style={{ opacity:0.6, fontSize:"12px", marginBottom:"8px" }}>Net Balance</div>
                         <div style={{ display:"flex", alignItems:"center", gap:"12px", marginBottom:"22px" }}>
                             <div onClick={() => { if(!balanceHidden){ setTempBal(String(initialBalance)); setModal("balance"); } }}
                                 className={balanceHidden?"balance-blur":"balance-visible"}
@@ -540,24 +557,24 @@
                             </div>
                             <button className="eye-btn" onClick={() => setBalanceHidden(v=>!v)}><EyeIcon open={!balanceHidden}/></button>
                         </div>
-                        {/* 三个操作按钮 */}
+                        {/* Three action buttons */}
                         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"10px" }}>
                             <button onClick={() => { setForm({...form,type:"income",id:null,amount:"0",category:allCats.income[0]}); setModal("record"); }}
-                                style={{ padding:"13px 6px", borderRadius:"14px", border:"none", background:"rgba(255,255,255,0.12)", color:"#fff", fontWeight:"600", cursor:"pointer", fontSize:"13px" }}>＋ 记收入</button>
+                                style={{ padding:"13px 6px", borderRadius:"14px", border:"none", background:"rgba(255,255,255,0.12)", color:"#fff", fontWeight:"600", cursor:"pointer", fontSize:"13px" }}>＋ Income</button>
                             <button onClick={() => { setForm({...form,type:"expense",id:null,amount:"0",category:allCats.expense[0]}); setModal("record"); }}
-                                style={{ padding:"13px 6px", borderRadius:"14px", border:"none", background:"rgba(255,255,255,0.12)", color:"#fff", fontWeight:"600", cursor:"pointer", fontSize:"13px" }}>－ 记支出</button>
-                            {/* 统计按钮 */}
+                                style={{ padding:"13px 6px", borderRadius:"14px", border:"none", background:"rgba(255,255,255,0.12)", color:"#fff", fontWeight:"600", cursor:"pointer", fontSize:"13px" }}>－ Expense</button>
+                            {/* Stats button */}
                             <button onClick={() => setShowChart(true)}
                                 style={{ padding:"13px 6px", borderRadius:"14px", border:"none", background:"rgba(255,255,255,0.12)", color:"#fff", fontWeight:"600", cursor:"pointer", fontSize:"13px", display:"flex", alignItems:"center", justifyContent:"center", gap:"5px" }}>
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                     <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
                                 </svg>
-                                统计
+                                Stats
                             </button>
                         </div>
                     </div>
 
-                    {/* 列表 */}
+                    {/* Record List */}
                     <div style={{ padding:"20px" }}>
                         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"20px" }}>
                             <div style={{ position:"relative" }} onClick={e=>e.stopPropagation()}>
@@ -576,13 +593,13 @@
                                 )}
                             </div>
                             <div style={{ fontSize:"12px", background:"#fff", padding:"4px 12px", borderRadius:"20px", color:"#666", boxShadow:"0 2px 6px rgba(0,0,0,0.02)" }}>
-                                收入 <span style={{ color:"#27ae60", fontWeight:"600" }}>{monthStats.income.toFixed(2)}</span> | 支出 <span style={{ color:"#e74c3c", fontWeight:"600" }}>{monthStats.expense.toFixed(2)}</span>
+                                In <span style={{ color:"#27ae60", fontWeight:"600" }}>{monthStats.income.toFixed(2)}</span> | Out <span style={{ color:"#e74c3c", fontWeight:"600" }}>{monthStats.expense.toFixed(2)}</span>
                             </div>
                         </div>
 
                         {grouped.length===0 && (
                             <div style={{ textAlign:"center", color:"#ccc", fontSize:"14px", padding:"60px 0" }}>
-                                <div style={{ fontSize:"40px", marginBottom:"12px" }}>📭</div>本月暂无记录
+                                <div style={{ fontSize:"40px", marginBottom:"12px" }}>📭</div>No records this month
                             </div>
                         )}
 
@@ -592,7 +609,7 @@
                             return (
                                 <div key={date} style={{ marginBottom:"24px" }}>
                                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"10px" }}>
-                                        <div style={{ fontSize:"12px", color:"#bbb", fontWeight:"600" }}>{date.split('-').slice(1).join('月')}日</div>
+                                        <div style={{ fontSize:"12px", color:"#bbb", fontWeight:"600" }}>{formatDateLabel(date)}</div>
                                         <div style={{ display:"flex", alignItems:"center", gap:"8px", fontSize:"12px" }}>
                                             {daily.income>0 && <span style={{ color:"#27ae60", fontWeight:"600" }}>+{daily.income.toFixed(2)}</span>}
                                             {daily.expense>0 && <span style={{ color:"#e74c3c", fontWeight:"600" }}>-{daily.expense.toFixed(2)}</span>}
@@ -623,7 +640,7 @@
                         })}
                     </div>
 
-                    {/* 记账面板 */}
+                    {/* Record Entry Panel */}
                     {(modal==="record"||modal==="datePicker"||modal==="manageCats") && (
                         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:100, display:"flex", flexDirection:"column-reverse" }}>
                             <div style={{ background:"#fff", borderRadius:"28px 28px 0 0", padding:"20px 20px 12px", animation:"slideUp 0.3s cubic-bezier(0.25,0.46,0.45,0.94)" }}>
@@ -632,7 +649,7 @@
                                         {["expense","income"].map(t => (
                                             <div key={t} onClick={() => setForm({...form,type:t,category:allCats[t][0]})}
                                                 style={{ padding:"8px 24px", borderRadius:"10px", fontSize:"14px", cursor:"pointer", background:form.type===t?"#fff":"transparent", fontWeight:form.type===t?"700":"400", boxShadow:form.type===t?"0 2px 8px rgba(0,0,0,0.1)":"none", transition:"0.2s" }}>
-                                                {t==="expense"?"支出":"收入"}
+                                                {t==="expense"?"Expense":"Income"}
                                             </div>
                                         ))}
                                     </div>
@@ -657,23 +674,23 @@
                                     ))}
                                     <div onClick={() => setModal("manageCats")} style={{ width:"54px", height:"54px", borderRadius:"18px", border:"2px dashed #eee", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"24px", color:"#ddd", cursor:"pointer" }}>＋</div>
                                 </div>
-                                <input placeholder="添加备注描述..." value={form.desc} onChange={e => setForm({...form,desc:e.target.value})} style={{ width:"100%", padding:"15px", background:"#f8f8f8", border:"none", borderRadius:"15px", marginBottom:"20px", boxSizing:"border-box", fontSize:"15px", outline:"none" }}/>
+                                <input placeholder="Add a note..." value={form.desc} onChange={e => setForm({...form,desc:e.target.value})} style={{ width:"100%", padding:"15px", background:"#f8f8f8", border:"none", borderRadius:"15px", marginBottom:"20px", boxSizing:"border-box", fontSize:"15px", outline:"none" }}/>
                                 <Keyboard onKey={k => onKeyboardInput(k,form.amount,(v)=>setForm(prev=>({...prev,amount:typeof v==='function'?v(prev.amount):v})),(final)=>submitRecord(final))}/>
-                                {form.id && <button onClick={() => { setRecords(r=>r.filter(x=>x.id!==form.id)); setModal(null); }} style={{ width:"100%", background:"none", border:"none", color:"#ff4d4f", marginTop:"15px", fontSize:"14px", cursor:"pointer" }}>删除记录</button>}
+                                {form.id && <button onClick={() => { setRecords(r=>r.filter(x=>x.id!==form.id)); setModal(null); }} style={{ width:"100%", background:"none", border:"none", color:"#ff4d4f", marginTop:"15px", fontSize:"14px", cursor:"pointer" }}>Delete Record</button>}
                             </div>
                             {modal==="datePicker" && <DatePickerModal value={form.date} onConfirm={d => { setForm(f=>({...f,date:d})); setModal("record"); }} onClose={() => setModal("record")}/>}
                             {modal==="manageCats" && <ManageCatsModal form={form} customCats={customCats} setCustomCats={setCustomCats} onClose={() => setModal("record")}/>}
                         </div>
                     )}
 
-                    {/* 设置初始金额 */}
+                    {/* Set Initial Balance */}
                     {modal==="balance" && (
                         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:100, display:"flex", flexDirection:"column-reverse" }}>
                             <div style={{ background:"#fff", borderRadius:"28px 28px 0 0", padding:"25px", animation:"slideUp 0.3s" }}>
                                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"30px" }}>
                                     <div>
-                                        <h3 style={{ margin:0, fontSize:"18px" }}>设置初始资产</h3>
-                                        <p style={{ margin:"4px 0 0", fontSize:"12px", color:"#999" }}>输入记账起始日的实际存款总额</p>
+                                        <h3 style={{ margin:0, fontSize:"18px" }}>Set Starting Balance</h3>
+                                        <p style={{ margin:"4px 0 0", fontSize:"12px", color:"#999" }}>Enter your actual total savings at the start of tracking</p>
                                     </div>
                                     <button onClick={() => { setModal(null); setCalcExpr(""); }} style={{ border:"none", background:"none", fontSize:"24px", color:"#ccc" }}>✕</button>
                                 </div>
