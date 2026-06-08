@@ -37,6 +37,18 @@
         .chart-line { stroke-dasharray: 2000; stroke-dashoffset: 2000; animation: drawLine 1.4s ease forwards; }
         .chart-dot { transform-origin: center; animation: popIn 0.25s ease forwards; opacity: 0; }
         .tab-btn { flex: 1; padding: 10px; border: none; border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+        .budget-bar-bg { background: rgba(255,255,255,0.15); border-radius: 8px; height: 8px; overflow: hidden; cursor: pointer; }
+        .budget-bar-fill { height: 100%; border-radius: 8px; transition: width 0.5s ease, background 0.3s ease; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+        .budget-over { animation: pulse 1.2s ease infinite; }
+        .goal-bar-bg { background: #f0f0f0; border-radius: 6px; height: 8px; overflow: hidden; }
+        .goal-bar-fill { height: 100%; border-radius: 6px; transition: width 0.6s ease; }
+        .goal-card { background: #fff; border-radius: 20px; padding: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.04); margin-bottom: 14px; }
+        .goal-action-btn { flex: 1; padding: 10px; border: none; border-radius: 12px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+        @keyframes confetti { 0%{transform:translateY(0) rotate(0deg);opacity:1} 100%{transform:translateY(-80px) rotate(720deg);opacity:0} }
+        .goal-done { animation: confetti 1.2s ease forwards; position: absolute; top: -10px; right: 10px; font-size: 28px; }
+        .goal-icon-btn { background: rgba(255,255,255,0.2); border: 2px solid transparent; border-radius: 12px; width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; font-size: 20px; cursor: pointer; transition: 0.15s; }
+        .goal-icon-btn.active { border-color: #1a1a1a; background: #f0f0f0; }
     </style>
 </head>
 <body>
@@ -48,6 +60,7 @@
             expense: [{ id: "e1", name: "Food", icon: "🍜" }, { id: "e2", name: "Shopping", icon: "🛍️" }, { id: "e3", name: "Transport", icon: "🚌" }, { id: "e4", name: "Entertainment", icon: "🎮" }]
         };
         const ICON_OPTIONS = ["💰","🎁","📈","💼","🧧","🍜","🛍️","🚌","🎮","💊","📚","✈️","🏠","💡","🍕","☕","🚗","🐶","🎨","📱","🛒","🎬","🌸"];
+        const GOAL_ICONS = ["🎯","🐷","🏠","📱","✈️","🎓","💻","🚗","💍","🐶","🎮","📚","💰"];
         // ── Date Picker Modal ──
         function DatePickerModal({ value, onConfirm, onClose }) {
             const now = new Date(value || Date.now());
@@ -457,6 +470,283 @@
                 </div>
             );
         }
+        // ── Savings Goals Page ──
+        function SavingsGoalsPage({ goals, setGoals, onClose }) {
+            const [goalModal, setGoalModal] = React.useState(null);
+            const [editingGoal, setEditingGoal] = React.useState(null);
+            const [goalForm, setGoalForm] = React.useState({ name:"", targetAmount:"0", targetDate:getDateKey(new Date()), icon:"🎯" });
+            const [goalAmount, setGoalAmount] = React.useState("0");
+            const [calcExpr, setCalcExpr] = React.useState("");
+            const [selIcon, setSelIcon] = React.useState("🎯");
+
+            const totalSaved = goals.reduce((s, g) => s + g.currentAmount, 0);
+            const totalTarget = goals.reduce((s, g) => s + g.targetAmount, 0);
+            const totalPercent = totalTarget > 0 ? Math.min((totalSaved / totalTarget) * 100, 100) : 0;
+
+            const onKeyboardInput = (key, currentVal, setVal, onConfirm) => {
+                if (/[0-9.]/.test(key)) {
+                    setVal(v => v === "0" && key !== "." ? key : v + key);
+                } else if (["+","-","*","/"].includes(key)) {
+                    setCalcExpr(prev => prev + currentVal + key);
+                    setVal("0");
+                } else if (key === "AC") {
+                    setVal("0");
+                    setCalcExpr("");
+                } else if (key === "DEL") {
+                    setVal(v => v.length > 1 ? v.slice(0, -1) : "0");
+                } else if (key === "=" || key === "OK") {
+                    try {
+                        const result = safeMath(calcExpr + currentVal);
+                        const final = Math.max(0, result);
+                        setVal(String(final.toFixed(2)));
+                        setCalcExpr("");
+                        if (key === "OK") onConfirm(final);
+                    } catch(e) { alert("Calculation error"); }
+                }
+            };
+
+            const addGoal = () => {
+                if (!goalForm.name.trim()) return;
+                const newGoal = { id: Date.now(), name: goalForm.name.trim(), targetAmount: Number(goalForm.targetAmount) || 0, currentAmount: 0, targetDate: goalForm.targetDate, icon: selIcon, createdAt: Date.now() };
+                setGoals(prev => [...prev, newGoal]);
+                setGoalForm({ name:"", targetAmount:"0", targetDate:getDateKey(new Date()), icon:"🎯" });
+                setGoalModal(null);
+            };
+            const updateGoal = () => {
+                if (!goalForm.name.trim() || !editingGoal) return;
+                setGoals(prev => prev.map(g => g.id === editingGoal.id ? { ...g, name: goalForm.name.trim(), targetAmount: Number(goalForm.targetAmount) || 0, targetDate: goalForm.targetDate, icon: selIcon } : g));
+                setGoalModal(null);
+                setEditingGoal(null);
+            };
+            const deleteGoal = (id) => {
+                if (!confirm("Delete this goal?")) return;
+                setGoals(prev => prev.filter(g => g.id !== id));
+            };
+            const depositToGoal = (id, amt) => {
+                if (amt <= 0) return;
+                setGoals(prev => prev.map(g => g.id === id ? { ...g, currentAmount: g.currentAmount + amt } : g));
+                setGoalModal(null);
+            };
+            const withdrawFromGoal = (id, amt) => {
+                if (amt <= 0) return;
+                setGoals(prev => prev.map(g => g.id === id ? { ...g, currentAmount: Math.max(0, g.currentAmount - amt) } : g));
+                setGoalModal(null);
+            };
+            const openEditGoal = (goal) => {
+                setEditingGoal(goal);
+                setGoalForm({ name: goal.name, targetAmount: String(goal.targetAmount), targetDate: goal.targetDate, icon: goal.icon });
+                setSelIcon(goal.icon);
+                setGoalModal("edit");
+            };
+            const openDeposit = (goal) => {
+                setEditingGoal(goal);
+                setGoalAmount("0");
+                setCalcExpr("");
+                setGoalModal("deposit");
+            };
+            const openWithdraw = (goal) => {
+                setEditingGoal(goal);
+                setGoalAmount("0");
+                setCalcExpr("");
+                setGoalModal("withdraw");
+            };
+
+            const GoalCard = ({ goal }) => {
+                const pct = goal.targetAmount > 0 ? Math.min((goal.currentAmount / goal.targetAmount) * 100, 100) : 0;
+                const daysLeft = Math.max(0, Math.ceil((new Date(goal.targetDate) - new Date()) / (1000*60*60*24)));
+                const dailyNeeded = daysLeft > 0 ? (goal.targetAmount - goal.currentAmount) / daysLeft : 0;
+                const isDone = goal.currentAmount >= goal.targetAmount && goal.targetAmount > 0;
+                const barColor = isDone ? "#27ae60" : pct <= 50 ? "#3498db" : pct <= 90 ? "#27ae60" : "#f39c12";
+                return (
+                    <div className="goal-card" style={{ position:"relative", overflow: isDone ? "visible" : "hidden" }}>
+                        {isDone && <div className="goal-done">🎉</div>}
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"16px" }}>
+                            <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
+                                <span style={{ fontSize:"28px" }}>{goal.icon}</span>
+                                <div>
+                                    <div style={{ fontSize:"16px", fontWeight:"700", color:"#1a1a1a" }}>{goal.name}</div>
+                                    <div style={{ fontSize:"12px", color:"#999" }}>Target: ¥{goal.targetAmount.toLocaleString()}</div>
+                                </div>
+                            </div>
+                            <span style={{ fontSize:"18px", fontWeight:"800", color: barColor }}>{pct.toFixed(0)}%</span>
+                        </div>
+                        <div className="goal-bar-bg" style={{ marginBottom:"12px" }}>
+                            <div className="goal-bar-fill" style={{ width:`${pct}%`, background: barColor }} />
+                        </div>
+                        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:"14px" }}>
+                            <span style={{ fontSize:"13px", color:"#666" }}>¥{goal.currentAmount.toLocaleString()} <span style={{ color:"#ccc" }}>/</span> ¥{goal.targetAmount.toLocaleString()}</span>
+                            {!isDone && <span style={{ fontSize:"12px", color:"#999" }}>{daysLeft}d · ¥{dailyNeeded.toFixed(1)}/d</span>}
+                        </div>
+                        <div style={{ display:"flex", gap:"8px" }}>
+                            {!isDone && <button className="goal-action-btn" onClick={() => openDeposit(goal)} style={{ background:"#eafaf1", color:"#27ae60" }}>Deposit</button>}
+                            {!isDone && goal.currentAmount > 0 && <button className="goal-action-btn" onClick={() => openWithdraw(goal)} style={{ background:"#f5f5f5", color:"#666" }}>Withdraw</button>}
+                            <button className="goal-action-btn" onClick={() => openEditGoal(goal)} style={{ background:"#f5f5f5", color:"#666" }}>Edit</button>
+                            <button className="goal-action-btn" onClick={() => deleteGoal(goal.id)} style={{ background:"#fff1f0", color:"#ff4d4f", maxWidth:"44px" }}>🗑️</button>
+                        </div>
+                    </div>
+                );
+            };
+
+            return (
+                <div style={{ position:"fixed", inset:0, background:"#F8F9FD", zIndex:150, maxWidth:"480px", margin:"0 auto", overflowY:"auto", animation:"slideInRight 0.28s ease" }}>
+                    <div style={{ background:"linear-gradient(135deg,#1a1a1a 0%,#434343 100%)", padding:"50px 25px 28px", color:"#fff", borderRadius:"0 0 32px 32px", boxShadow:"0 10px 20px rgba(0,0,0,0.1)" }}>
+                        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"22px" }}>
+                            <button onClick={onClose} style={{ background:"rgba(255,255,255,0.15)", border:"none", borderRadius:"12px", padding:"8px 14px", color:"#fff", fontSize:"14px", fontWeight:"600", cursor:"pointer", display:"flex", alignItems:"center", gap:"6px" }}>
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+                                Back
+                            </button>
+                            <span style={{ fontSize:"16px", fontWeight:"700" }}>Savings Goals</span>
+                            <div style={{ width:"80px" }} />
+                        </div>
+                        <div style={{ textAlign:"center", marginBottom:"8px" }}>
+                            <div style={{ fontSize:"32px", fontWeight:"800" }}>¥{totalSaved.toLocaleString()}</div>
+                            <div style={{ fontSize:"12px", opacity:0.6, marginTop:"4px" }}>of ¥{totalTarget.toLocaleString()} total target ({totalPercent.toFixed(0)}%)</div>
+                        </div>
+                    </div>
+                    <div style={{ padding:"20px" }}>
+                        {goals.length === 0 && (
+                            <div style={{ textAlign:"center", color:"#ccc", padding:"60px 20px" }}>
+                                <div style={{ fontSize:"48px", marginBottom:"12px" }}>🎯</div>
+                                <div style={{ fontSize:"14px" }}>No savings goals yet</div>
+                                <div style={{ fontSize:"12px", marginTop:"6px", color:"#ddd" }}>Tap the button below to add one</div>
+                            </div>
+                        )}
+                        {goals.map(g => <GoalCard key={g.id} goal={g} />)}
+                        <button onClick={() => { setGoalForm({ name:"", targetAmount:"0", targetDate:getDateKey(new Date()), icon:"🎯" }); setSelIcon("🎯"); setGoalModal("add"); }}
+                            style={{ width:"100%", padding:"16px", background:"#fff", border:"2px dashed #ddd", borderRadius:"20px", fontSize:"15px", fontWeight:"600", color:"#999", cursor:"pointer", marginTop:"4px" }}>
+                            ＋ New Goal
+                        </button>
+                    </div>
+                    {/* Goal Add/Edit Modal */}
+                    {goalModal === "add" && (
+                        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:160, display:"flex", flexDirection:"column-reverse" }}>
+                            <div style={{ background:"#fff", borderRadius:"28px 28px 0 0", padding:"25px", animation:"slideUp 0.3s" }}>
+                                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"20px" }}>
+                                    <h3 style={{ margin:0, fontSize:"18px" }}>New Savings Goal</h3>
+                                    <button onClick={() => setGoalModal(null)} style={{ border:"none", background:"none", fontSize:"24px", color:"#ccc", cursor:"pointer" }}>✕</button>
+                                </div>
+                                <div style={{ display:"flex", gap:"6px", flexWrap:"wrap", marginBottom:"16px" }}>
+                                    {GOAL_ICONS.map(ic => (
+                                        <div key={ic} onClick={() => { setSelIcon(ic); setGoalForm({...goalForm, icon:ic}); }} className={`goal-icon-btn ${selIcon===ic?"active":""}`}>{ic}</div>
+                                    ))}
+                                </div>
+                                <input placeholder="Goal name (e.g. Travel)" value={goalForm.name} onChange={e => setGoalForm({...goalForm, name:e.target.value})}
+                                    style={{ width:"100%", padding:"14px", background:"#f8f8f8", border:"none", borderRadius:"14px", fontSize:"15px", outline:"none", marginBottom:"12px", boxSizing:"border-box" }} />
+                                <div style={{ fontSize:"12px", color:"#999", marginBottom:"6px" }}>Target Amount</div>
+                                <div style={{ textAlign:"center", marginBottom:"16px" }}>
+                                    <div style={{ fontSize:"14px", color:"#bbb", height:"18px" }}>{calcExpr}</div>
+                                    <div style={{ fontSize:"32px", fontWeight:"800", color:"#1a1a1a" }}>¥{goalForm.targetAmount}</div>
+                                </div>
+                                <div style={{ display:"flex", alignItems:"center", gap:"8px", marginBottom:"16px" }}>
+                                    <span style={{ fontSize:"13px", color:"#666" }}>Target Date:</span>
+                                    <div onClick={() => setGoalModal("addDate")} style={{ background:"#f5f5f5", padding:"8px 12px", borderRadius:"10px", fontSize:"14px", fontWeight:"600", cursor:"pointer" }}>{goalForm.targetDate.replace(/-/g,"/")}</div>
+                                </div>
+                                <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:"6px", background:"#f2f2f2", padding:"10px", borderRadius:"16px" }}>
+                                    {["1","2","3","AC","4","5","6","+","7","8","9","-",".","0","DEL","OK"].map(k => (
+                                        <button key={k} onClick={() => onKeyboardInput(k, goalForm.targetAmount, (v)=>setGoalForm(p=>({...p,targetAmount:typeof v==='function'?v(p.targetAmount):v})), (final)=>{ setGoalForm(p=>({...p,targetAmount:String(final)})); })}
+                                            className={`num-btn ${k==='OK'?'primary-btn':''}`}
+                                            style={k==='=' ? {background:"#f0f0f0", fontWeight:"700"} : {}}>
+                                            {k}
+                                        </button>
+                                    ))}
+                                </div>
+                                <button onClick={addGoal} style={{ width:"100%", marginTop:"16px", background:"#1a1a1a", color:"#fff", border:"none", padding:"14px", borderRadius:"14px", fontSize:"15px", fontWeight:"700", cursor:"pointer" }}>Create Goal</button>
+                            </div>
+                        </div>
+                    )}
+                    {goalModal === "addDate" && (
+                        <DatePickerModal value={goalForm.targetDate} onConfirm={d => { setGoalForm(f=>({...f,targetDate:d})); setGoalModal("add"); }} onClose={() => setGoalModal("add")} />
+                    )}
+                    {goalModal === "edit" && (
+                        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:160, display:"flex", flexDirection:"column-reverse" }}>
+                            <div style={{ background:"#fff", borderRadius:"28px 28px 0 0", padding:"25px", animation:"slideUp 0.3s" }}>
+                                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"20px" }}>
+                                    <h3 style={{ margin:0, fontSize:"18px" }}>Edit Goal</h3>
+                                    <button onClick={() => { setGoalModal(null); setEditingGoal(null); }} style={{ border:"none", background:"none", fontSize:"24px", color:"#ccc", cursor:"pointer" }}>✕</button>
+                                </div>
+                                <div style={{ display:"flex", gap:"6px", flexWrap:"wrap", marginBottom:"16px" }}>
+                                    {GOAL_ICONS.map(ic => (
+                                        <div key={ic} onClick={() => { setSelIcon(ic); setGoalForm({...goalForm, icon:ic}); }} className={`goal-icon-btn ${selIcon===ic?"active":""}`}>{ic}</div>
+                                    ))}
+                                </div>
+                                <input placeholder="Goal name" value={goalForm.name} onChange={e => setGoalForm({...goalForm, name:e.target.value})}
+                                    style={{ width:"100%", padding:"14px", background:"#f8f8f8", border:"none", borderRadius:"14px", fontSize:"15px", outline:"none", marginBottom:"12px", boxSizing:"border-box" }} />
+                                <div style={{ fontSize:"12px", color:"#999", marginBottom:"6px" }}>Target Amount</div>
+                                <div style={{ textAlign:"center", marginBottom:"16px" }}>
+                                    <div style={{ fontSize:"14px", color:"#bbb", height:"18px" }}>{calcExpr}</div>
+                                    <div style={{ fontSize:"32px", fontWeight:"800", color:"#1a1a1a" }}>¥{goalForm.targetAmount}</div>
+                                </div>
+                                <div style={{ display:"flex", alignItems:"center", gap:"8px", marginBottom:"16px" }}>
+                                    <span style={{ fontSize:"13px", color:"#666" }}>Target Date:</span>
+                                    <div onClick={() => setGoalModal("editDate")} style={{ background:"#f5f5f5", padding:"8px 12px", borderRadius:"10px", fontSize:"14px", fontWeight:"600", cursor:"pointer" }}>{goalForm.targetDate.replace(/-/g,"/")}</div>
+                                </div>
+                                <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:"6px", background:"#f2f2f2", padding:"10px", borderRadius:"16px" }}>
+                                    {["1","2","3","AC","4","5","6","+","7","8","9","-",".","0","DEL","OK"].map(k => (
+                                        <button key={k} onClick={() => onKeyboardInput(k, goalForm.targetAmount, (v)=>setGoalForm(p=>({...p,targetAmount:typeof v==='function'?v(p.targetAmount):v})), (final)=>{ setGoalForm(p=>({...p,targetAmount:String(final)})); })}
+                                            className={`num-btn ${k==='OK'?'primary-btn':''}`}
+                                            style={k==='=' ? {background:"#f0f0f0", fontWeight:"700"} : {}}>
+                                            {k}
+                                        </button>
+                                    ))}
+                                </div>
+                                <button onClick={updateGoal} style={{ width:"100%", marginTop:"16px", background:"#1a1a1a", color:"#fff", border:"none", padding:"14px", borderRadius:"14px", fontSize:"15px", fontWeight:"700", cursor:"pointer" }}>Save Changes</button>
+                            </div>
+                        </div>
+                    )}
+                    {goalModal === "editDate" && (
+                        <DatePickerModal value={goalForm.targetDate} onConfirm={d => { setGoalForm(f=>({...f,targetDate:d})); setGoalModal("edit"); }} onClose={() => setGoalModal("edit")} />
+                    )}
+                    {goalModal === "deposit" && editingGoal && (
+                        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:160, display:"flex", flexDirection:"column-reverse" }}>
+                            <div style={{ background:"#fff", borderRadius:"28px 28px 0 0", padding:"25px", animation:"slideUp 0.3s" }}>
+                                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"20px" }}>
+                                    <h3 style={{ margin:0, fontSize:"18px" }}>Deposit to {editingGoal.icon} {editingGoal.name}</h3>
+                                    <button onClick={() => setGoalModal(null)} style={{ border:"none", background:"none", fontSize:"24px", color:"#ccc", cursor:"pointer" }}>✕</button>
+                                </div>
+                                <div style={{ textAlign:"center", marginBottom:"24px" }}>
+                                    <div style={{ fontSize:"14px", color:"#bbb", height:"18px" }}>{calcExpr}</div>
+                                    <div style={{ fontSize:"36px", fontWeight:"800", color:"#27ae60" }}>¥{goalAmount}</div>
+                                    <div style={{ fontSize:"12px", color:"#999", marginTop:"4px" }}>Current: ¥{editingGoal.currentAmount.toLocaleString()} / ¥{editingGoal.targetAmount.toLocaleString()}</div>
+                                </div>
+                                <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:"6px", background:"#f2f2f2", padding:"10px", borderRadius:"16px" }}>
+                                    {["1","2","3","AC","4","5","6","+","7","8","9","-",".","0","DEL","OK"].map(k => (
+                                        <button key={k} onClick={() => onKeyboardInput(k, goalAmount, setGoalAmount, (final)=>depositToGoal(editingGoal.id, final))}
+                                            className={`num-btn ${k==='OK'?'primary-btn':''}`}
+                                            style={k==='=' ? {background:"#f0f0f0", fontWeight:"700"} : {}}>
+                                            {k}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    {goalModal === "withdraw" && editingGoal && (
+                        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:160, display:"flex", flexDirection:"column-reverse" }}>
+                            <div style={{ background:"#fff", borderRadius:"28px 28px 0 0", padding:"25px", animation:"slideUp 0.3s" }}>
+                                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"20px" }}>
+                                    <h3 style={{ margin:0, fontSize:"18px" }}>Withdraw from {editingGoal.icon} {editingGoal.name}</h3>
+                                    <button onClick={() => setGoalModal(null)} style={{ border:"none", background:"none", fontSize:"24px", color:"#ccc", cursor:"pointer" }}>✕</button>
+                                </div>
+                                <div style={{ textAlign:"center", marginBottom:"24px" }}>
+                                    <div style={{ fontSize:"14px", color:"#bbb", height:"18px" }}>{calcExpr}</div>
+                                    <div style={{ fontSize:"36px", fontWeight:"800", color:"#666" }}>¥{goalAmount}</div>
+                                    <div style={{ fontSize:"12px", color:"#999", marginTop:"4px" }}>Available: ¥{editingGoal.currentAmount.toLocaleString()}</div>
+                                </div>
+                                <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:"6px", background:"#f2f2f2", padding:"10px", borderRadius:"16px" }}>
+                                    {["1","2","3","AC","4","5","6","+","7","8","9","-",".","0","DEL","OK"].map(k => (
+                                        <button key={k} onClick={() => onKeyboardInput(k, goalAmount, setGoalAmount, (final)=>withdrawFromGoal(editingGoal.id, final))}
+                                            className={`num-btn ${k==='OK'?'primary-btn':''}`}
+                                            style={k==='=' ? {background:"#f0f0f0", fontWeight:"700"} : {}}>
+                                            {k}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
         const fmt = (n) => "¥" + Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2 });
         const getMonthKey = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
         const getDateKey = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
@@ -469,8 +759,17 @@
             const [calcExpr, setCalcExpr] = useState("");
             const [balanceHidden, setBalanceHidden] = useState(() => localStorage.getItem('balHidden') === 'true');
             const [showChart, setShowChart] = useState(false);
-            const [form, setForm] = useState({ id:null, type:"expense", amount:"0", category:null, desc:"", date:getDateKey(new Date()) });
+            const [form, setForm] = useState({ id:null, type:"expense", amount:"0", category:null, desc:"", date:getDateKey(new Date()), goalId:null, goalAmount:"0" });
             const [tempBal, setTempBal] = useState("0");
+            const [budget, setBudget] = useState(() => Number(localStorage.getItem('budget')) || 0);
+            const [tempBudget, setTempBudget] = useState("0");
+            const [showBudgetSetting, setShowBudgetSetting] = useState(false);
+            const [savingsGoals, setSavingsGoals] = useState(() => JSON.parse(localStorage.getItem('savingsGoals')) || []);
+            const [showGoals, setShowGoals] = useState(false);
+            const [goalModal, setGoalModal] = useState(null);
+            const [editingGoal, setEditingGoal] = useState(null);
+            const [goalForm, setGoalForm] = useState({ name:"", targetAmount:"0", targetDate:getDateKey(new Date()), icon:"🎯" });
+            const [goalAmount, setGoalAmount] = useState("0");
             const allCats = useMemo(() => ({
                 income: [...DEFAULT_CATEGORIES.income, ...customCats.income],
                 expense: [...DEFAULT_CATEGORIES.expense, ...customCats.expense]
@@ -479,6 +778,8 @@
             useEffect(() => localStorage.setItem('initBal', initialBalance), [initialBalance]);
             useEffect(() => localStorage.setItem('customCats', JSON.stringify(customCats)), [customCats]);
             useEffect(() => localStorage.setItem('balHidden', balanceHidden), [balanceHidden]);
+            useEffect(() => localStorage.setItem('budget', budget), [budget]);
+            useEffect(() => localStorage.setItem('savingsGoals', JSON.stringify(savingsGoals)), [savingsGoals]);
             // 改进后的计算器逻辑（支持连续运算 + = 按钮）
             const onKeyboardInput = (key, currentVal, setVal, onConfirm) => {
                 if (/[0-9.]/.test(key)) {
@@ -493,7 +794,7 @@
                     setVal(v => v.length > 1 ? v.slice(0, -1) : "0");
                 } else if (key === "=") {
                     try {
-                        const result = eval(calcExpr + currentVal);
+                        const result = safeMath(calcExpr + currentVal);
                         setVal(String(Math.max(-9999999, result).toFixed(2)));
                         setCalcExpr("");
                     } catch(e) {
@@ -501,7 +802,7 @@
                     }
                 } else if (key === "OK") {
                     try {
-                        const result = eval(calcExpr + currentVal);
+                        const result = safeMath(calcExpr + currentVal);
                         const final = Math.max(-9999999, result);
                         onConfirm(final);
                         setCalcExpr("");
@@ -513,12 +814,21 @@
             };
             const submitRecord = (finalAmt) => {
                 if (finalAmt===0 && Number(form.amount)===0) return;
-                const entry = { id:form.id||Date.now(), type:form.type, amount:Math.abs(finalAmt||Number(form.amount)), category:form.category?.name||"Other", icon:form.category?.icon||"📌", desc:form.desc||form.category?.name, ts:new Date(form.date).getTime() };
+                const amt = Math.abs(finalAmt||Number(form.amount));
+                const entry = { id:form.id||Date.now(), type:form.type, amount:amt, category:form.category?.name||"Other", icon:form.category?.icon||"📌", desc:form.desc||form.category?.name, ts:new Date(form.date).getTime(), goalId:form.goalId||null, goalAmount:form.goalId?amt:0 };
                 setRecords(prev => form.id?prev.map(r=>r.id===form.id?entry:r):[entry,...prev]);
+                if (form.goalId && form.type === "income" && !form.id) {
+                    setSavingsGoals(prev => prev.map(g => g.id === form.goalId ? { ...g, currentAmount: g.currentAmount + amt } : g));
+                }
+                setForm({...form, goalId:null, goalAmount:"0"});
                 setModal(null);
             };
             const monthRecords = records.filter(r => getMonthKey(new Date(r.ts))===viewMonth);
             const monthStats = monthRecords.reduce((acc,r) => { acc[r.type]+=r.amount; return acc; }, {income:0,expense:0});
+            const budgetRemaining = budget - monthStats.expense;
+            const budgetPercent = budget > 0 ? Math.min((monthStats.expense / budget) * 100, 100) : 0;
+            const budgetColor = budget <= 0 ? "#666" : budgetPercent <= 60 ? "#27ae60" : budgetPercent <= 90 ? "#f39c12" : "#e74c3c";
+            const budgetOver = budget > 0 && monthStats.expense > budget;
             const totalBalance = initialBalance + records.reduce((s,r)=>s+(r.type==="income"?r.amount:-r.amount),0);
             const grouped = useMemo(() => {
                 const g = {};
@@ -560,6 +870,7 @@
                 <div style={{ paddingBottom:"40px" }} onClick={() => showMonthPicker&&setShowMonthPicker(false)}>
                     {/* Statistics / Chart Page (full-screen overlay) */}
                     {showChart && <ChartPage records={records} onClose={() => setShowChart(false)}/>}
+                    {showGoals && <SavingsGoalsPage goals={savingsGoals} setGoals={setSavingsGoals} onClose={() => setShowGoals(false)}/>}
                     {/* Top Panel */}
                     <div style={{ background:"linear-gradient(135deg,#1a1a1a 0%,#434343 100%)", padding:"35px 25px 25px", color:"#fff", borderRadius:"0 0 32px 32px", boxShadow:"0 10px 20px rgba(0,0,0,0.1)" }}>
                         <div style={{ opacity:0.6, fontSize:"12px", marginBottom:"8px" }}>Net Balance</div>
@@ -570,7 +881,28 @@
                                 {fmt(totalBalance)}
                             </div>
                             <button className="eye-btn" onClick={() => setBalanceHidden(v=>!v)}><EyeIcon open={!balanceHidden}/></button>
+                            <button className="eye-btn" onClick={() => setShowGoals(true)} style={{ fontSize:"16px" }}>🎯</button>
                         </div>
+                        {/* Budget Progress Bar */}
+                        {budget > 0 && (
+                            <div onClick={() => { setTempBudget(String(budget)); setCalcExpr(""); setShowBudgetSetting(true); }} style={{ marginBottom:"18px", cursor:"pointer" }}>
+                                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"8px" }}>
+                                    <span style={{ fontSize:"12px", opacity:0.7 }}>
+                                        {budgetOver ? `Over budget by ¥${Math.abs(budgetRemaining).toFixed(2)}` : `Remaining ¥${budgetRemaining.toFixed(2)}`}
+                                    </span>
+                                    <span style={{ fontSize:"12px", opacity:0.7 }}>{budgetPercent.toFixed(0)}%</span>
+                                </div>
+                                <div className="budget-bar-bg">
+                                    <div className={`budget-bar-fill ${budgetOver ? 'budget-over' : ''}`} style={{ width:`${budgetPercent}%`, background: budgetColor }} />
+                                </div>
+                                <div style={{ fontSize:"11px", opacity:0.5, marginTop:"6px", textAlign:"right" }}>Budget: ¥{monthStats.expense.toFixed(2)} / ¥{budget.toFixed(2)}</div>
+                            </div>
+                        )}
+                        {budget === 0 && (
+                            <div onClick={() => { setTempBudget("0"); setCalcExpr(""); setShowBudgetSetting(true); }} style={{ marginBottom:"18px", padding:"10px 14px", borderRadius:"12px", border:"1px dashed rgba(255,255,255,0.2)", cursor:"pointer", textAlign:"center" }}>
+                                <span style={{ fontSize:"12px", opacity:0.5 }}>Set Monthly Budget</span>
+                            </div>
+                        )}
                         {/* Three action buttons */}
                         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"10px" }}>
                             <button onClick={() => { setForm({...form,type:"income",id:null,amount:"0",category:allCats.income[0]}); setModal("record"); }}
@@ -657,7 +989,7 @@
                                 <div style={{ display:"flex", justifyContent:"space-between", marginBottom:"20px" }}>
                                     <div style={{ display:"flex", background:"#f0f0f0", borderRadius:"12px", padding:"4px" }}>
                                         {["expense","income"].map(t => (
-                                            <div key={t} onClick={() => setForm({...form,type:t,category:allCats[t][0]})}
+                                            <div key={t} onClick={() => setForm({...form,type:t,category:allCats[t][0],goalId:null})} 
                                                 style={{ padding:"8px 24px", borderRadius:"10px", fontSize:"14px", cursor:"pointer", background:form.type===t?"#fff":"transparent", fontWeight:form.type===t?"700":"400", boxShadow:form.type===t?"0 2px 8px rgba(0,0,0,0.1)":"none", transition:"0.2s" }}>
                                                 {t==="expense"?"Expense":"Income"}
                                             </div>
@@ -685,8 +1017,28 @@
                                     <div onClick={() => setModal("manageCats")} style={{ width:"54px", height:"54px", borderRadius:"18px", border:"2px dashed #eee", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"24px", color:"#ddd", cursor:"pointer" }}>＋</div>
                                 </div>
                                 <input placeholder="Add a note..." value={form.desc} onChange={e => setForm({...form,desc:e.target.value})} style={{ width:"100%", padding:"15px", background:"#f8f8f8", border:"none", borderRadius:"15px", marginBottom:"20px", boxSizing:"border-box", fontSize:"15px", outline:"none" }}/>
+                                {form.type === "income" && savingsGoals.length > 0 && (
+                                    <div style={{ background:"#f0faf4", borderRadius:"14px", padding:"12px", marginBottom:"16px" }}>
+                                        <div style={{ fontSize:"11px", color:"#27ae60", fontWeight:"600", marginBottom:"8px" }}> Allocate to Savings Goal (optional) </div>
+                                        <div style={{ display:"flex", gap:"8px", overflowX:"auto", paddingBottom:"4px" }}>
+                                            {savingsGoals.filter(g => g.currentAmount < g.targetAmount).map(g => (
+                                                <div key={g.id} onClick={() => setForm({...form, goalId: form.goalId===g.id ? null : g.id})}
+                                                    style={{ flexShrink:0, padding:"8px 14px", borderRadius:"12px", background: form.goalId===g.id ? "#27ae60" : "#fff", color: form.goalId===g.id ? "#fff" : "#333", fontSize:"13px", fontWeight:"600", cursor:"pointer", display:"flex", alignItems:"center", gap:"6px", transition:"0.15s", border: form.goalId===g.id ? "none" : "1px solid #e0e0e0" }}>
+                                                    <span>{g.icon}</span>{g.name}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                                 <Keyboard onKey={k => onKeyboardInput(k,form.amount,(v)=>setForm(prev=>({...prev,amount:typeof v==='function'?v(prev.amount):v})),(final)=>submitRecord(final))}/>
-                                {form.id && <button onClick={() => { setRecords(r=>r.filter(x=>x.id!==form.id)); setModal(null); }} style={{ width:"100%", background:"none", border:"none", color:"#ff4d4f", marginTop:"15px", fontSize:"14px", cursor:"pointer" }}>Delete Record</button>}
+                                {form.id && <button onClick={() => {
+                                    const deleted = records.find(x=>x.id===form.id);
+                                    setRecords(r=>r.filter(x=>x.id!==form.id));
+                                    if (deleted && deleted.goalId && deleted.goalAmount) {
+                                        setSavingsGoals(prev => prev.map(g => g.id === deleted.goalId ? {...g, currentAmount: Math.max(0, g.currentAmount - deleted.goalAmount)} : g));
+                                    }
+                                    setModal(null);
+                                }} style={{ width:"100%", background:"none", border:"none", color:"#ff4d4f", marginTop:"15px", fontSize:"14px", cursor:"pointer" }}>Delete Record</button>}
                             </div>
                             {modal==="datePicker" && <DatePickerModal value={form.date} onConfirm={d => { setForm(f=>({...f,date:d})); setModal("record"); }} onClose={() => setModal("record")}/>}
                             {modal==="manageCats" && <ManageCatsModal form={form} customCats={customCats} setCustomCats={setCustomCats} onClose={() => setModal("record")}/>}
@@ -708,6 +1060,28 @@
                                     <div style={{ fontSize:"40px", fontWeight:"800", color:"#1a1a1a" }}>{tempBal}</div>
                                 </div>
                                 <Keyboard onKey={k => onKeyboardInput(k,tempBal,setTempBal,(final)=>{ setInitialBalance(final); setModal(null); })}/>
+                            </div>
+                        </div>
+                    )}
+                    {/* Budget Settings Modal */}
+                    {showBudgetSetting && (
+                        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:200, display:"flex", flexDirection:"column-reverse" }}>
+                            <div style={{ background:"#fff", borderRadius:"28px 28px 0 0", padding:"25px", animation:"slideUp 0.3s" }}>
+                                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"30px" }}>
+                                    <div>
+                                        <h3 style={{ margin:0, fontSize:"18px" }}>Set Monthly Budget</h3>
+                                        <p style={{ margin:"4px 0 0", fontSize:"12px", color:"#999" }}>Set your monthly spending limit</p>
+                                    </div>
+                                    <button onClick={() => { setShowBudgetSetting(false); setCalcExpr(""); }} style={{ border:"none", background:"none", fontSize:"24px", color:"#ccc" }}>✕</button>
+                                </div>
+                                <div style={{ textAlign:"center", marginBottom:"30px" }}>
+                                    <div style={{ fontSize:"14px", color:"#bbb", height:"20px" }}>{calcExpr}</div>
+                                    <div style={{ fontSize:"40px", fontWeight:"800", color:"#1a1a1a" }}>¥{tempBudget}</div>
+                                </div>
+                                <Keyboard onKey={k => onKeyboardInput(k,tempBudget,setTempBudget,(final)=>{ setBudget(Math.max(0,final)); setShowBudgetSetting(false); setCalcExpr(""); })}/>
+                                {budget > 0 && (
+                                    <button onClick={() => { setBudget(0); setShowBudgetSetting(false); setCalcExpr(""); }} style={{ width:"100%", background:"none", border:"none", color:"#ff4d4f", marginTop:"15px", fontSize:"14px", cursor:"pointer" }}>Clear Budget</button>
+                                )}
                             </div>
                         </div>
                     )}
