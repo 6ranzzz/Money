@@ -4,8 +4,7 @@ const CACHE_NAME = 'accounting-app-' + CACHE_VERSION;
 const STATIC_FILES = [
   './',
   './index.html',
-  './manifest.json',
-  './icon-192.png'
+  './manifest.json'
 ];
 
 const CDN_HOSTS = [
@@ -15,7 +14,9 @@ const CDN_HOSTS = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
-      return cache.addAll(STATIC_FILES);
+      return Promise.all(
+        STATIC_FILES.map(url => cache.add(url).catch(() => {}))
+      );
     }).then(() => self.skipWaiting())
   );
 });
