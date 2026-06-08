@@ -61,6 +61,13 @@
         };
         const ICON_OPTIONS = ["💰","🎁","📈","💼","🧧","🍜","🛍️","🚌","🎮","💊","📚","✈️","🏠","💡","🍕","☕","🚗","🐶","🎨","📱","🛒","🎬","🌸"];
         const GOAL_ICONS = ["🎯","🐷","🏠","📱","✈️","🎓","💻","🚗","💍","🐶","🎮","📚","💰"];
+        // ── Safe Math Parser (replaces eval) ──
+        function safeMath(expr) {
+            const cleaned = expr.replace(/\s+/g, '');
+            if (!/^[0-9+\-*/.()]+$/.test(cleaned)) return 0;
+            try { return Function('"use strict"; return (' + cleaned + ')')(); }
+            catch(e) { return 0; }
+        }
         // ── Date Picker Modal ──
         function DatePickerModal({ value, onConfirm, onClose }) {
             const now = new Date(value || Date.now());
