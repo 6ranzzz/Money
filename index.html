@@ -14,6 +14,8 @@
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css"/>
+    <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
     <style>
         body { margin: 0; padding: 0; background-color: #F8F9FD; font-family: -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; }
         #root { max-width: 480px; margin: 0 auto; min-height: 100vh; position: relative; }
@@ -49,13 +51,12 @@
         .goal-done { animation: confetti 1.2s ease forwards; position: absolute; top: -10px; right: 10px; font-size: 28px; }
         .goal-icon-btn { background: rgba(255,255,255,0.2); border: 2px solid transparent; border-radius: 12px; width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; font-size: 20px; cursor: pointer; transition: 0.15s; }
         .goal-icon-btn.active { border-color: #1a1a1a; background: #f0f0f0; }
-        .stats-panels { display: flex; overflow-x: auto; scroll-snap-type: x proximity; flex: 1; }
-        .stats-panels::-webkit-scrollbar { display: none; }
-        .stats-panel { min-width: 100%; scroll-snap-align: start; scroll-snap-stop: always; overflow-y: auto; padding: 16px 20px; box-sizing: border-box; }
-        .stats-panel::-webkit-scrollbar { display: none; }
-        .dot-indicator { display: flex; justify-content: center; gap: 8px; padding: 10px 0; }
-        .dot { width: 8px; height: 8px; border-radius: 50%; background: #ddd; transition: background 0.3s; }
-        .dot.active { background: #1a1a1a; }
+        .swiper { width: 100%; flex: 1; }
+        .swiper-wrapper::-webkit-scrollbar { display: none; }
+        .swiper-slide { overflow-y: auto; padding: 16px 20px; box-sizing: border-box; }
+        .swiper-slide::-webkit-scrollbar { display: none; }
+        .swiper-pagination-bullet { background: #ddd; opacity: 1; }
+        .swiper-pagination-bullet-active { background: #1a1a1a; }
     </style>
 </head>
 <body>
@@ -558,7 +559,8 @@
             const [chartDisplay, setChartDisplay] = useState("line");
             const [animKey, setAnimKey] = useState(0);
             const [activePanel, setActivePanel] = useState(0);
-            const panelsRef = React.useRef(null);
+            const swiperRef = React.useRef(null);
+            const swiperInstance = React.useRef(null);
 
             const now = new Date();
             const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -587,13 +589,19 @@
                 setAnimKey(k=>k+1);
             };
 
-            const handleScroll = () => {
-                if (!panelsRef.current) return;
-                const { scrollLeft, scrollWidth, clientWidth } = panelsRef.current;
-                const panelWidth = clientWidth;
-                const idx = Math.round(scrollLeft / panelWidth);
-                setActivePanel(Math.min(Math.max(idx, 0), 3));
-            };
+            React.useEffect(() => {
+                if (swiperRef.current && !swiperInstance.current) {
+                    swiperInstance.current = new Swiper(swiperRef.current, {
+                        slidesPerView: 1,
+                        spaceBetween: 0,
+                        resistanceRatio: 0.65,
+                        speed: 300,
+                        pagination: { el: '.swiper-pagination', clickable: true },
+                        onSlideChange: (e) => setActivePanel(e.activeIndex),
+                    });
+                }
+                return () => { if (swiperInstance.current) { swiperInstance.current.destroy(); swiperInstance.current = null; } };
+            }, []);
 
             const monthlyData = useMemo(() => {
                 const map = {};
@@ -752,10 +760,11 @@
                         </div>
                     </div>
 
-                    {/* 4-Panel Horizontal Scroll */}
-                    <div ref={panelsRef} className="stats-panels" onScroll={handleScroll}>
-                        {/* P1: Chart + Summary */}
-                        <div className="stats-panel">
+                    {/* 4-Panel Swiper */}
+                    <div ref={swiperRef} className="swiper">
+                        <div className="swiper-wrapper">
+                            {/* P1: Chart + Summary */}
+                            <div className="swiper-slide">
                             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"8px", marginBottom:"16px" }}>
                                 {[
                                     { label: viewMode==="monthly"?"Annual Income":"Monthly Income", val:totalIncome, color:"#4eca7f" },
@@ -802,7 +811,7 @@
                         </div>
 
                         {/* P2: Detail Table */}
-                        <div className="stats-panel">
+                        <div className="swiper-slide">
                             <div style={{ background:"#fff", borderRadius:"20px", overflow:"hidden", boxShadow:"0 4px 20px rgba(0,0,0,0.04)" }}>
                                 <div style={{ padding:"14px 18px 10px", display:"flex", justifyContent:"space-between", fontSize:"11px", color:"#bbb", fontWeight:"700", borderBottom:"1px solid #f5f5f5", letterSpacing:"0.5px" }}>
                                     <span>{viewMode === "monthly" ? "Month" : "Day"}</span>
@@ -852,7 +861,7 @@
                         </div>
 
                         {/* P3: Category Bar Charts */}
-                        <div className="stats-panel">
+                        <div className="swiper-slide">
                             <div style={{ background:"#fff", borderRadius:"20px", padding:"20px 16px", boxShadow:"0 4px 20px rgba(0,0,0,0.04)", marginBottom:"16px" }}>
                                 <div style={{ fontSize:"13px", fontWeight:"700", color:"#333", marginBottom:"16px" }}>📊 Expense Categories</div>
                                 {expenseCategoryData.length === 0
@@ -870,7 +879,7 @@
                         </div>
 
                         {/* P4: Analysis */}
-                        <div className="stats-panel">
+                        <div className="swiper-slide">
                             {(peakIncome.income > 0 || peakExpense.expense > 0) && (
                                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"12px", marginBottom:"16px" }}>
                                     {peakIncome.income > 0 && (
@@ -917,17 +926,8 @@
                                 </div>
                             )}
                         </div>
-                    </div>
-
-                    {/* Dot Indicator */}
-                    <div className="dot-indicator" style={{ flexShrink:0, background:"#F8F9FD" }}>
-                        {[0,1,2,3].map(i => (
-                            <div key={i} className={`dot ${activePanel === i ? 'active' : ''}`}
-                                onClick={() => {
-                                    if (panelsRef.current) panelsRef.current.scrollTo({ left: i * panelsRef.current.clientWidth, behavior:'smooth' });
-                                }}
-                                style={{ cursor:"pointer" }} />
-                        ))}
+                        </div>
+                        <div className="swiper-pagination" style={{ paddingBottom:"10px" }}></div>
                     </div>
 
                     {showYearPicker && <YearPickerModal value={selYear} onConfirm={switchYear} onClose={() => setShowYearPicker(false)}/>}
