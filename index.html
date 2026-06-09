@@ -787,7 +787,10 @@
                                     </button>
                                 ))}
                             </div>
-                            <div style={{ background:"#fff", borderRadius:"20px", padding:"20px 16px 12px", boxShadow:"0 4px 20px rgba(0,0,0,0.04)", touchAction:"pan-y" }}>
+                            <div style={{ background:"#fff", borderRadius:"20px", padding:"20px 16px 12px", boxShadow:"0 4px 20px rgba(0,0,0,0.04)", touchAction:"pan-y" }}
+                                onPointerDown={() => swiperInstance.current?.allowTouchMove(false)}
+                                onPointerUp={() => swiperInstance.current?.allowTouchMove(true)}
+                                onPointerCancel={() => swiperInstance.current?.allowTouchMove(true)}>
                                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"14px" }}>
                                     <div style={{ fontSize:"12px", color:"#bbb", fontWeight:"600" }}>
                                         {selYear}{viewMode==="daily" && ` · ${MONTH_NAMES[selMonth-1]}`} · {chartType==="expense"?"Expense Trend":chartType==="income"?"Income Trend":"Income vs Expense"}
