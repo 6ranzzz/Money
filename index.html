@@ -49,6 +49,13 @@
         .goal-done { animation: confetti 1.2s ease forwards; position: absolute; top: -10px; right: 10px; font-size: 28px; }
         .goal-icon-btn { background: rgba(255,255,255,0.2); border: 2px solid transparent; border-radius: 12px; width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; font-size: 20px; cursor: pointer; transition: 0.15s; }
         .goal-icon-btn.active { border-color: #1a1a1a; background: #f0f0f0; }
+        .stats-panels { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; flex: 1; }
+        .stats-panels::-webkit-scrollbar { display: none; }
+        .stats-panel { min-width: 100%; scroll-snap-align: start; overflow-y: auto; padding: 16px 20px; box-sizing: border-box; }
+        .stats-panel::-webkit-scrollbar { display: none; }
+        .dot-indicator { display: flex; justify-content: center; gap: 8px; padding: 10px 0; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: #ddd; transition: background 0.3s; }
+        .dot.active { background: #1a1a1a; }
     </style>
 </head>
 <body>
@@ -151,6 +158,52 @@
                 </div>
             );
         }
+        // ── Year + Month Picker Modal (for daily mode) ──
+        function YearMonthPickerModal({ year, month, onConfirm, onClose }) {
+            const years = Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 4 + i);
+            const [selY, setSelY] = React.useState(year);
+            const [selM, setSelM] = React.useState(month);
+            const ref = React.useRef(null);
+            const ITEM_H = 48;
+            const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+            React.useEffect(() => { const idx = years.indexOf(selY); if (ref.current) ref.current.scrollTop = idx * ITEM_H; }, []);
+            const onScroll = () => { const idx = Math.round(ref.current.scrollTop / ITEM_H); if (years[idx] !== undefined) setSelY(years[idx]); };
+            return (
+                <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:300, display:"flex", alignItems:"flex-end" }} onClick={onClose}>
+                    <div style={{ background:"#fff", borderRadius:"24px 24px 0 0", padding:"24px", width:"100%", maxWidth:"480px", margin:"0 auto", animation:"slideUp 0.3s" }} onClick={e=>e.stopPropagation()}>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"20px" }}>
+                            <span style={{ fontSize:"16px", fontWeight:"700" }}>Select Year & Month</span>
+                            <button onClick={onClose} style={{ border:"none", background:"none", fontSize:"20px", color:"#ccc", cursor:"pointer" }}>✕</button>
+                        </div>
+                        <div style={{ fontSize:"12px", color:"#999", fontWeight:"600", marginBottom:"8px" }}>Year</div>
+                        <div style={{ position:"relative", marginBottom:"20px" }}>
+                            <div style={{ position:"absolute", top:"50%", left:0, right:0, height:ITEM_H, transform:"translateY(-50%)", background:"#f0f0f0", borderRadius:"12px", pointerEvents:"none", zIndex:1 }} />
+                            <div ref={ref} onScroll={onScroll} style={{ height:ITEM_H*5, overflowY:"scroll", scrollSnapType:"y mandatory", scrollbarWidth:"none", position:"relative", zIndex:2 }}>
+                                <div style={{ height:ITEM_H*2 }} />
+                                {years.map(y => (
+                                    <div key={y} onClick={() => { setSelY(y); ref.current.scrollTo({ top:years.indexOf(y)*ITEM_H, behavior:"smooth" }); }}
+                                        style={{ height:ITEM_H, display:"flex", alignItems:"center", justifyContent:"center", scrollSnapAlign:"center", fontSize:"20px", fontWeight:y===selY?"800":"400", color:y===selY?"#1a1a1a":"#bbb", transition:"0.15s", cursor:"pointer" }}>
+                                        {y}
+                                    </div>
+                                ))}
+                                <div style={{ height:ITEM_H*2 }} />
+                            </div>
+                        </div>
+                        <div style={{ fontSize:"12px", color:"#999", fontWeight:"600", marginBottom:"8px" }}>Month</div>
+                        <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:"8px", marginBottom:"20px" }}>
+                            {MONTH_SHORT.map((m,i) => (
+                                <div key={i} onClick={() => setSelM(i+1)}
+                                    style={{ padding:"12px 0", borderRadius:"12px", textAlign:"center", fontSize:"14px", fontWeight:selM===i+1?"700":"500",
+                                        background:selM===i+1?"#1a1a1a":"#f5f5f5", color:selM===i+1?"#fff":"#666", cursor:"pointer", transition:"0.15s" }}>
+                                    {m}
+                                </div>
+                            ))}
+                        </div>
+                        <button onClick={() => onConfirm(selY, selM)} style={{ width:"100%", background:"#1a1a1a", color:"#fff", border:"none", padding:"14px", borderRadius:"14px", fontSize:"15px", fontWeight:"700", cursor:"pointer" }}>Confirm</button>
+                    </div>
+                </div>
+            );
+        }
         // ── Category Management Modal ──
         function ManageCatsModal({ form, customCats, setCustomCats, onClose }) {
             const [selIcon, setSelIcon] = React.useState(ICON_OPTIONS[0]);
@@ -209,76 +262,197 @@
                 </svg>
             );
         }
-        // ── Single Line Chart ──
-        function LineChart({ data, type, animKey }) {
+        // ── Single Line Chart (v3) ──
+        function LineChart({ data, type, animKey, emptySlot, chartDisplay }) {
             const [tooltip, setTooltip] = useState(null);
             const W = 320, H = 180;
-            const PAD = { top: 20, right: 12, bottom: 34, left: 44 };
+            const PAD = { top: 20, right: 12, bottom: 34, left: 48 };
             const cW = W - PAD.left - PAD.right;
             const cH = H - PAD.top - PAD.bottom;
             const color = type === "income" ? "#27ae60" : "#e74c3c";
-            const fillColor = type === "income" ? "rgba(39,174,96,0.1)" : "rgba(231,76,60,0.1)";
+            const gradId = `lg-${type}-${animKey}`;
+            const clipId = `clip-${type}-${animKey}`;
             if (!data || data.every(d => d.value === 0)) {
-                return <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: H, color: "#ccc", fontSize: "13px" }}>No data for this year</div>;
+                return emptySlot || <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:H, color:"#ccc", fontSize:"13px" }}>No data</div>;
             }
             const maxVal = Math.max(...data.map(d => d.value), 1);
-            const pts = data.map((d, i) => ({
-                x: PAD.left + (i / (data.length - 1)) * cW,
-                y: PAD.top + cH - (d.value / maxVal) * cH,
-                ...d
-            }));
-            const polyline = pts.map(p => `${p.x},${p.y}`).join(" ");
-            const area = `M${pts[0].x},${PAD.top+cH} ${pts.map(p=>`L${p.x},${p.y}`).join(" ")} L${pts[pts.length-1].x},${PAD.top+cH} Z`;
-            const yTicks = [0,0.5,1].map(r => ({ y: PAD.top + cH - r*cH, label: (r*maxVal)>=10000?((r*maxVal)/10000).toFixed(1)+"k":Math.round(r*maxVal).toString() }));
+            const avg = data.reduce((s,d)=>s+d.value,0) / data.length;
+            const useBars = chartDisplay === "bar";
+            const barW = useBars ? Math.min(Math.floor(cW / data.length * 0.65), 14) : 0;
+            const fmtK = v => v >= 10000 ? (v/10000).toFixed(1)+"k" : v >= 1000 ? (v/1000).toFixed(1)+"k" : Math.round(v).toString();
+            const niceMax = v => { if(v<=0)return 0; const m=Math.pow(10,Math.floor(Math.log10(v))); const r=Math.ceil(v/m)*m; return r; };
+            const yMax = niceMax(maxVal);
+            const yTicks = [0,0.25,0.5,0.75,1].map(r=>({ y:PAD.top+cH-r*cH, label:fmtK(yMax*r) }));
+            const showLabel = (i) => {
+                if (data.length <= 6) return true;
+                if (data.length <= 14) return i%2===0 || i===data.length-1;
+                return i%5===0 || i===0 || i===data.length-1;
+            };
+            const makeSmoothPath = (points) => {
+                if (points.length < 2) return "";
+                const minY = PAD.top, maxY = PAD.top + cH;
+                let d = `M${points[0].x},${points[0].y}`;
+                for (let i = 0; i < points.length - 1; i++) {
+                    const p0 = points[Math.max(i - 1, 0)];
+                    const p1 = points[i];
+                    const p2 = points[i + 1];
+                    const p3 = points[Math.min(i + 2, points.length - 1)];
+                    const tension = 0.3;
+                    const cp1x = p1.x + (p2.x - p0.x) * tension;
+                    const cp1y = Math.min(maxY, Math.max(minY, p1.y + (p2.y - p0.y) * tension));
+                    const cp2x = p2.x - (p3.x - p1.x) * tension;
+                    const cp2y = Math.min(maxY, Math.max(minY, p2.y - (p3.y - p1.y) * tension));
+                    d += ` C${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y}`;
+                }
+                return d;
+            };
+            if (useBars) {
+                const barGap = (cW - barW * data.length) / (data.length + 1);
+                const avgY = PAD.top + cH - (avg / yMax) * cH;
+                return (
+                    <div style={{ position:"relative" }} key={animKey}>
+                        <svg viewBox={`0 0 ${W} ${H}`} style={{ width:"100%", overflow:"visible" }} onMouseLeave={()=>setTooltip(null)}>
+                            <defs>
+                                <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stopColor={color} stopOpacity="0.9"/>
+                                    <stop offset="100%" stopColor={color} stopOpacity="0.25"/>
+                                </linearGradient>
+                                <clipPath id={clipId}>
+                                    <rect x={PAD.left} y={PAD.top} width={cW} height={cH}/>
+                                </clipPath>
+                            </defs>
+                            {yTicks.map((t,i)=>(
+                                <g key={i}>
+                                    <line x1={PAD.left} y1={t.y} x2={W-PAD.right} y2={t.y} stroke="#f0f0f0" strokeWidth="1"/>
+                                    <text x={PAD.left-5} y={t.y+3} textAnchor="end" fontSize="8" fill="#ccc" fontWeight="500">{t.label}</text>
+                                </g>
+                            ))}
+                            <line x1={PAD.left} y1={avgY} x2={W-PAD.right} y2={avgY} stroke={color} strokeWidth="1" strokeDasharray="4 3" opacity="0.4"/>
+                            <text x={W-PAD.right} y={avgY-4} textAnchor="end" fontSize="7" fill={color} opacity="0.6" fontWeight="600">avg {fmtK(avg)}</text>
+                            {data.map((d,i)=>{
+                                const x = PAD.left + barGap + i*(barW+barGap);
+                                const h = (d.value/yMax)*cH;
+                                const y = PAD.top+cH-h;
+                                return (
+                                    <g key={i}>
+                                        <rect x={x} y={y} width={barW} height={h} rx={barW>6?3:2} fill={`url(#${gradId})`}
+                                            style={{ cursor:"pointer", transition:"opacity 0.15s" }}
+                                            onMouseEnter={(e)=>{const r=e.target.closest('svg').getBoundingClientRect();setTooltip({x:x+barW/2,y,label:d.label,value:d.value});}}
+                                            onTouchStart={(e)=>{e.preventDefault();setTooltip({x:x+barW/2,y,label:d.label,value:d.value});}}/>
+                                    </g>
+                                );
+                            })}
+                            {data.map((d,i)=>{
+                                const x = PAD.left + barGap + i*(barW+barGap);
+                                return showLabel(i) ? <text key={i} x={x+barW/2} y={H-6} textAnchor="middle" fontSize="8" fill="#bbb">{d.label}</text> : null;
+                            })}
+                            {tooltip && (()=>{
+                                const tx = tooltip.x < PAD.left+cW/2 ? tooltip.x+10 : tooltip.x-90;
+                                const ty = Math.max(tooltip.y-50, PAD.top);
+                                return (
+                                    <g>
+                                        <rect x={tx} y={ty} width="82" height="36" rx="10" fill="#1a1a1a" opacity="0.92"/>
+                                        <text x={tx+41} y={ty+14} textAnchor="middle" fontSize="9" fill="#aaa" fontWeight="500">{tooltip.label}</text>
+                                        <text x={tx+41} y={ty+29} textAnchor="middle" fontSize="12" fill="#fff" fontWeight="700">¥{tooltip.value.toFixed(2)}</text>
+                                    </g>
+                                );
+                            })()}
+                        </svg>
+                    </div>
+                );
+            }
+            const pts = data.map((d,i)=>({ x:PAD.left+(i/(data.length-1))*cW, y:PAD.top+cH-(d.value/yMax)*cH, ...d }));
+            const linePath = makeSmoothPath(pts);
+            const areaPath = `M${pts[0].x},${PAD.top+cH} ${linePath.slice(1)} L${pts[pts.length-1].x},${PAD.top+cH} Z`;
+            const avgY = PAD.top + cH - (avg / yMax) * cH;
             return (
-                <div style={{ position: "relative" }} key={animKey}>
-                    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", overflow: "visible" }} onMouseLeave={() => setTooltip(null)}>
-                        {yTicks.map((t,i) => (
+                <div style={{ position:"relative" }} key={animKey}>
+                    <svg viewBox={`0 0 ${W} ${H}`} style={{ width:"100%", overflow:"visible" }} onMouseLeave={()=>setTooltip(null)}>
+                        <defs>
+                            <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor={color} stopOpacity="0.35"/>
+                                <stop offset="100%" stopColor={color} stopOpacity="0.02"/>
+                            </linearGradient>
+                            <clipPath id={clipId}>
+                                <rect x={PAD.left} y={PAD.top} width={cW} height={cH}/>
+                            </clipPath>
+                        </defs>
+                        {yTicks.map((t,i)=>(
                             <g key={i}>
                                 <line x1={PAD.left} y1={t.y} x2={W-PAD.right} y2={t.y} stroke="#f0f0f0" strokeWidth="1"/>
-                                <text x={PAD.left-5} y={t.y+4} textAnchor="end" fontSize="9" fill="#ccc" fontWeight="500">{t.label}</text>
+                                <text x={PAD.left-5} y={t.y+3} textAnchor="end" fontSize="8" fill="#ccc" fontWeight="500">{t.label}</text>
                             </g>
                         ))}
-                        {data.map((d,i) => {
-                            const x = PAD.left + (i/(data.length-1))*cW;
-                            const show = data.length<=6 || i%2===0 || i===data.length-1;
-                            return show ? <text key={i} x={x} y={H-6} textAnchor="middle" fontSize="9" fill="#bbb">{d.label}</text> : null;
+                        <line x1={PAD.left} y1={avgY} x2={W-PAD.right} y2={avgY} stroke={color} strokeWidth="1" strokeDasharray="4 3" opacity="0.4"/>
+                        <text x={W-PAD.right} y={avgY-4} textAnchor="end" fontSize="7" fill={color} opacity="0.6" fontWeight="600">avg {fmtK(avg)}</text>
+                        {data.map((d,i)=>{
+                            const x = PAD.left+(i/(data.length-1))*cW;
+                            return showLabel(i) ? <text key={i} x={x} y={H-6} textAnchor="middle" fontSize="8" fill="#bbb">{d.label}</text> : null;
                         })}
-                        <path d={area} fill={fillColor}/>
-                        <polyline points={polyline} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="chart-line"/>
-                        {pts.map((p,i) => (
-                            <circle key={i} cx={p.x} cy={p.y} r="5" fill="#fff" stroke={color} strokeWidth="2.5"
-                                className="chart-dot" style={{ animationDelay: `${0.15+i*0.07}s`, cursor:"pointer" }}
-                                onMouseEnter={() => setTooltip(p)} onTouchStart={() => setTooltip(p)}/>
-                        ))}
-                        {tooltip && (() => {
-                            const tx = tooltip.x < PAD.left+cW/2 ? tooltip.x+10 : tooltip.x-86;
-                            const ty = tooltip.y < PAD.top+28 ? tooltip.y+10 : tooltip.y-36;
+                        <path d={areaPath} fill={`url(#${gradId})`} clipPath={`url(#${clipId})`}/>
+                        <path d={linePath} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="chart-line"/>
+                        {tooltip && (()=>{
+                            const tx = tooltip.x < PAD.left+cW/2 ? tooltip.x+10 : tooltip.x-90;
+                            const ty = Math.max(tooltip.y-50, PAD.top);
                             return (
                                 <g>
-                                    <rect x={tx} y={ty} width="76" height="24" rx="8" fill="#1a1a1a" opacity="0.88"/>
-                                    <text x={tx+38} y={ty+16} textAnchor="middle" fontSize="11" fill="#fff" fontWeight="700">¥{tooltip.value.toFixed(0)}</text>
+                                    <rect x={tx} y={ty} width="82" height="36" rx="10" fill="#1a1a1a" opacity="0.92"/>
+                                    <text x={tx+41} y={ty+14} textAnchor="middle" fontSize="9" fill="#aaa" fontWeight="500">{tooltip.label}</text>
+                                    <text x={tx+41} y={ty+29} textAnchor="middle" fontSize="12" fill="#fff" fontWeight="700">¥{tooltip.value.toFixed(2)}</text>
                                 </g>
                             );
                         })()}
+                        {tooltip && (()=>{
+                            return <line x1={tooltip.x} y1={PAD.top} x2={tooltip.x} y2={PAD.top+cH} stroke={color} strokeWidth="1" strokeDasharray="3 2" opacity="0.35"/>;
+                        })()}
+                        {pts.map((p,i)=>(
+                            <rect key={i} x={p.x-12} y={PAD.top} width={24} height={cH} fill="transparent" style={{cursor:"pointer"}}
+                                onMouseEnter={()=>setTooltip(p)} onTouchStart={(e)=>{e.preventDefault();setTooltip(p);}}/>
+                        ))}
                     </svg>
                 </div>
             );
         }
-        // ── Income vs Expense Dual Line Chart ──
-        function BothChart({ incomeData, expenseData, animKey }) {
+        // ── Income vs Expense Dual Line Chart (v3) ──
+        function BothChart({ incomeData, expenseData, animKey, emptySlot, chartDisplay }) {
             const [tooltip, setTooltip] = useState(null);
             const W = 320, H = 180;
-            const PAD = { top: 20, right: 12, bottom: 34, left: 44 };
+            const PAD = { top: 20, right: 12, bottom: 34, left: 48 };
             const cW = W - PAD.left - PAD.right;
             const cH = H - PAD.top - PAD.bottom;
             const allVals = [...incomeData.map(d=>d.value), ...expenseData.map(d=>d.value)];
             const maxVal = Math.max(...allVals, 1);
-            const makePts = (data) => data.map((d,i) => ({ x: PAD.left+(i/(data.length-1))*cW, y: PAD.top+cH-(d.value/maxVal)*cH, ...d }));
-            const iPts = makePts(incomeData), ePts = makePts(expenseData);
-            const yTicks = [0,0.5,1].map(r => ({ y: PAD.top+cH-r*cH, label: (r*maxVal)>=10000?((r*maxVal)/10000).toFixed(1)+"k":Math.round(r*maxVal).toString() }));
+            const iAvg = incomeData.reduce((s,d)=>s+d.value,0)/incomeData.length;
+            const eAvg = expenseData.reduce((s,d)=>s+d.value,0)/expenseData.length;
             const hasAny = allVals.some(v => v > 0);
-            if (!hasAny) return <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:H, color:"#ccc", fontSize:"13px" }}>No data for this year</div>;
+            const niceMax = v => { if(v<=0)return 0; const m=Math.pow(10,Math.floor(Math.log10(v))); return Math.ceil(v/m)*m; };
+            const yMax = niceMax(maxVal);
+            const fmtK = v => v>=10000?(v/10000).toFixed(1)+"k":v>=1000?(v/1000).toFixed(1)+"k":Math.round(v).toString();
+            const yTicks = [0,0.25,0.5,0.75,1].map(r=>({ y:PAD.top+cH-r*cH, label:fmtK(yMax*r) }));
+            if (!hasAny) return emptySlot || <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:H, color:"#ccc", fontSize:"13px" }}>No data</div>;
+            const makeSmoothPath = (points) => {
+                if (points.length < 2) return "";
+                const minY = PAD.top, maxY = PAD.top + cH;
+                let d = `M${points[0].x},${points[0].y}`;
+                for (let i = 0; i < points.length - 1; i++) {
+                    const p0 = points[Math.max(i-1,0)], p1 = points[i], p2 = points[i+1], p3 = points[Math.min(i+2,points.length-1)];
+                    const t = 0.3;
+                    const cp1x = p1.x+(p2.x-p0.x)*t;
+                    const cp1y = Math.min(maxY, Math.max(minY, p1.y+(p2.y-p0.y)*t));
+                    const cp2x = p2.x-(p3.x-p1.x)*t;
+                    const cp2y = Math.min(maxY, Math.max(minY, p2.y-(p3.y-p1.y)*t));
+                    d += ` C${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y}`;
+                }
+                return d;
+            };
+            const makePts = (data) => data.map((d,i)=>({ x:PAD.left+(i/(data.length-1))*cW, y:PAD.top+cH-(d.value/yMax)*cH, ...d }));
+            const iPts = makePts(incomeData), ePts = makePts(expenseData);
+            const iPath = makeSmoothPath(iPts), ePath = makeSmoothPath(ePts);
+            const showLabel = (i) => {
+                if (incomeData.length <= 6) return true;
+                if (incomeData.length <= 14) return i%2===0||i===incomeData.length-1;
+                return i%5===0||i===0||i===incomeData.length-1;
+            };
             return (
                 <div key={animKey}>
                     <div style={{ display:"flex", gap:"16px", marginBottom:"10px" }}>
@@ -289,45 +463,138 @@
                             <svg width="18" height="4"><line x1="0" y1="2" x2="18" y2="2" stroke="#e74c3c" strokeWidth="2.5" strokeDasharray="5 3"/></svg> Expense
                         </div>
                     </div>
-                    <svg viewBox={`0 0 ${W} ${H}`} style={{ width:"100%", overflow: "visible" }} onMouseLeave={() => setTooltip(null)}>
-                        {yTicks.map((t,i) => (
+                    <svg viewBox={`0 0 ${W} ${H}`} style={{ width:"100%", overflow:"visible" }} onMouseLeave={()=>setTooltip(null)}>
+                        <defs>
+                            <linearGradient id={`lg-i-${animKey}`} x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="#27ae60" stopOpacity="0.3"/>
+                                <stop offset="100%" stopColor="#27ae60" stopOpacity="0.02"/>
+                            </linearGradient>
+                            <linearGradient id={`lg-e-${animKey}`} x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="#e74c3c" stopOpacity="0.3"/>
+                                <stop offset="100%" stopColor="#e74c3c" stopOpacity="0.02"/>
+                            </linearGradient>
+                            <clipPath id={`clip-both-${animKey}`}>
+                                <rect x={PAD.left} y={PAD.top} width={cW} height={cH}/>
+                            </clipPath>
+                        </defs>
+                        {yTicks.map((t,i)=>(
                             <g key={i}>
                                 <line x1={PAD.left} y1={t.y} x2={W-PAD.right} y2={t.y} stroke="#f0f0f0" strokeWidth="1"/>
-                                <text x={PAD.left-5} y={t.y+4} textAnchor="end" fontSize="9" fill="#ccc">{t.label}</text>
+                                <text x={PAD.left-5} y={t.y+3} textAnchor="end" fontSize="8" fill="#ccc" fontWeight="500">{t.label}</text>
                             </g>
                         ))}
-                        {incomeData.map((d,i) => {
-                            const x = PAD.left+(i/(incomeData.length-1))*cW;
-                            const show = incomeData.length<=6||i%2===0||i===incomeData.length-1;
-                            return show?<text key={i} x={x} y={H-6} textAnchor="middle" fontSize="9" fill="#bbb">{d.label}</text>:null;
+                        {incomeData.map((d,i)=>{
+                            const x=PAD.left+(i/(incomeData.length-1))*cW;
+                            return showLabel(i)?<text key={i} x={x} y={H-6} textAnchor="middle" fontSize="8" fill="#bbb">{d.label}</text>:null;
                         })}
-                        <path d={`M${iPts[0].x},${PAD.top+cH} ${iPts.map(p=>`L${p.x},${p.y}`).join(" ")} L${iPts[iPts.length-1].x},${PAD.top+cH} Z`} fill="rgba(39,174,96,0.08)"/>
-                        <path d={`M${ePts[0].x},${PAD.top+cH} ${ePts.map(p=>`L${p.x},${p.y}`).join(" ")} L${ePts[ePts.length-1].x},${PAD.top+cH} Z`} fill="rgba(231,76,60,0.08)"/>
-                        <polyline points={iPts.map(p=>`${p.x},${p.y}`).join(" ")} fill="none" stroke="#27ae60" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="chart-line" style={{animationDelay:"0.05s"}}/>
-                        <polyline points={ePts.map(p=>`${p.x},${p.y}`).join(" ")} fill="none" stroke="#e74c3c" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="7 4" className="chart-line" style={{animationDelay:"0.15s"}}/>
-                        {iPts.map((p,i) => <circle key={`i${i}`} cx={p.x} cy={p.y} r="4.5" fill="#fff" stroke="#27ae60" strokeWidth="2.5" className="chart-dot" style={{animationDelay:`${0.1+i*0.07}s`,cursor:"pointer"}} onMouseEnter={()=>setTooltip({...p,kind:"income"})} onTouchStart={()=>setTooltip({...p,kind:"income"})}/>)}
-                        {ePts.map((p,i) => <circle key={`e${i}`} cx={p.x} cy={p.y} r="4.5" fill="#fff" stroke="#e74c3c" strokeWidth="2.5" className="chart-dot" style={{animationDelay:`${0.2+i*0.07}s`,cursor:"pointer"}} onMouseEnter={()=>setTooltip({...p,kind:"expense"})} onTouchStart={()=>setTooltip({...p,kind:"expense"})}/>)}
-                        {tooltip && (() => {
+                        <path d={`M${iPts[0].x},${PAD.top+cH} ${iPath.slice(1)} L${iPts[iPts.length-1].x},${PAD.top+cH} Z`} fill={`url(#lg-i-${animKey})`} clipPath={`url(#clip-both-${animKey})`}/>
+                        <path d={`M${ePts[0].x},${PAD.top+cH} ${ePath.slice(1)} L${ePts[ePts.length-1].x},${PAD.top+cH} Z`} fill={`url(#lg-e-${animKey})`} clipPath={`url(#clip-both-${animKey})`}/>
+                        <path d={iPath} fill="none" stroke="#27ae60" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="chart-line" style={{animationDelay:"0.05s"}}/>
+                        <path d={ePath} fill="none" stroke="#e74c3c" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="7 4" className="chart-line" style={{animationDelay:"0.15s"}}/>
+                        {tooltip && (()=>{
                             const c = tooltip.kind==="income"?"#27ae60":"#e74c3c";
-                            const tx = tooltip.x<PAD.left+cW/2?tooltip.x+10:tooltip.x-86;
-                            const ty = tooltip.y<PAD.top+28?tooltip.y+10:tooltip.y-36;
-                            return <g><rect x={tx} y={ty} width="76" height="24" rx="8" fill={c} opacity="0.9"/><text x={tx+38} y={ty+16} textAnchor="middle" fontSize="11" fill="#fff" fontWeight="700">¥{tooltip.value.toFixed(0)}</text></g>;
+                            const tx = tooltip.x<PAD.left+cW/2?tooltip.x+10:tooltip.x-90;
+                            const ty = Math.max(tooltip.y-50,PAD.top);
+                            return (
+                                <g>
+                                    <rect x={tx} y={ty} width="82" height="36" rx="10" fill={c} opacity="0.92"/>
+                                    <text x={tx+41} y={ty+14} textAnchor="middle" fontSize="9" fill="rgba(255,255,255,0.7)" fontWeight="500">{tooltip.label}</text>
+                                    <text x={tx+41} y={ty+29} textAnchor="middle" fontSize="12" fill="#fff" fontWeight="700">¥{tooltip.value.toFixed(2)}</text>
+                                </g>
+                            );
                         })()}
+                        {tooltip && (()=>{
+                            const c = tooltip.kind==="income"?"#27ae60":"#e74c3c";
+                            return <line x1={tooltip.x} y1={PAD.top} x2={tooltip.x} y2={PAD.top+cH} stroke={c} strokeWidth="1" strokeDasharray="3 2" opacity="0.35"/>;
+                        })()}
+                        {iPts.map((p,i)=>(
+                            <rect key={`it${i}`} x={p.x-12} y={PAD.top} width={24} height={cH} fill="transparent" style={{cursor:"pointer"}}
+                                onMouseEnter={()=>setTooltip({...p,kind:"income"})} onTouchStart={(e)=>{e.preventDefault();setTooltip({...p,kind:"income"});}}/>
+                        ))}
+                        {ePts.map((p,i)=>(
+                            <rect key={`et${i}`} x={p.x-12} y={PAD.top} width={24} height={cH} fill="transparent" style={{cursor:"pointer"}}
+                                onMouseEnter={()=>setTooltip({...p,kind:"expense"})} onTouchStart={(e)=>{e.preventDefault();setTooltip({...p,kind:"expense"});}}/>
+                        ))}
                     </svg>
                 </div>
             );
         }
-        // ── Chart / Statistics Page (已整合月度/日度切换) ──
+        // ── Category Horizontal Bar Chart ──
+        function CategoryBarChart({ data, type, animKey }) {
+            const color = type === "income" ? "#27ae60" : "#e74c3c";
+            const bgColor = type === "income" ? "rgba(39,174,96,0.1)" : "rgba(231,76,60,0.1)";
+            if (!data || data.length === 0) {
+                return <div style={{ textAlign:"center", padding:"30px 0" }}><div style={{ fontSize:"40px", marginBottom:"10px" }}>📊</div><div style={{ color:"#999", fontSize:"13px" }}>No category data</div></div>;
+            }
+            const maxVal = Math.max(...data.map(d => d.amount), 1);
+            return (
+                <div key={animKey}>
+                    {data.map((d, i) => (
+                        <div key={i} style={{ display:"flex", alignItems:"center", gap:"10px", marginBottom: i < data.length-1 ? "10px" : 0 }}>
+                            <span style={{ fontSize:"20px", width:"28px", textAlign:"center" }}>{d.icon}</span>
+                            <div style={{ flex:1 }}>
+                                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:"4px" }}>
+                                    <span style={{ fontSize:"13px", fontWeight:"600", color:"#333" }}>{d.name}</span>
+                                    <span style={{ fontSize:"12px", fontWeight:"700", color }}>{d.amount >= 10000 ? `¥${(d.amount/10000).toFixed(1)}k` : `¥${d.amount.toFixed(0)}`}</span>
+                                </div>
+                                <div style={{ height:"8px", background:bgColor, borderRadius:"4px", overflow:"hidden" }}>
+                                    <div style={{ width:`${(d.amount/maxVal)*100}%`, height:"100%", background:color, borderRadius:"4px", transition:"width 0.5s ease" }} />
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            );
+        }
+        // ── Chart / Statistics Page (v3 - 4-panel horizontal swipe) ──
         function ChartPage({ records, onClose }) {
             const [chartType, setChartType] = useState("expense");
-            const [viewMode, setViewMode] = useState("monthly"); // monthly / daily
+            const [viewMode, setViewMode] = useState("monthly");
             const [selYear, setSelYear] = useState(new Date().getFullYear());
             const [selMonth, setSelMonth] = useState(new Date().getMonth() + 1);
             const [showYearPicker, setShowYearPicker] = useState(false);
+            const [showYMPicker, setShowYMPicker] = useState(false);
+            const [showAllEntries, setShowAllEntries] = useState(false);
+            const [chartDisplay, setChartDisplay] = useState("line");
             const [animKey, setAnimKey] = useState(0);
+            const [activePanel, setActivePanel] = useState(0);
+            const panelsRef = React.useRef(null);
+
+            const now = new Date();
+            const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+            const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
             const switchType = (t) => { setChartType(t); setAnimKey(k=>k+1); };
             const switchYear = (y) => { setSelYear(y); setShowYearPicker(false); setAnimKey(k=>k+1); };
-            // 月度数据
+            const switchYearMonth = (y, m) => { setSelYear(y); setSelMonth(m); setShowYMPicker(false); setAnimKey(k=>k+1); };
+
+            const goPrev = () => {
+                setAnimKey(k=>k+1);
+                if (viewMode === "monthly") setSelYear(y => y - 1);
+                else { if (selMonth === 1) { setSelYear(y => y - 1); setSelMonth(12); } else setSelMonth(m => m - 1); }
+            };
+            const goNext = () => {
+                setAnimKey(k=>k+1);
+                if (viewMode === "monthly") setSelYear(y => y + 1);
+                else { if (selMonth === 12) { setSelYear(y => y + 1); setSelMonth(1); } else setSelMonth(m => m + 1); }
+            };
+            const switchViewMode = (m) => {
+                setViewMode(m);
+                setSelYear(now.getFullYear());
+                setSelMonth(now.getMonth() + 1);
+                setShowAllEntries(false);
+                setChartDisplay("line");
+                setAnimKey(k=>k+1);
+            };
+
+            const handleScroll = () => {
+                if (!panelsRef.current) return;
+                const { scrollLeft, scrollWidth, clientWidth } = panelsRef.current;
+                const panelWidth = clientWidth;
+                const idx = Math.round(scrollLeft / panelWidth);
+                setActivePanel(Math.min(Math.max(idx, 0), 3));
+            };
+
             const monthlyData = useMemo(() => {
                 const map = {};
                 for (let m=1; m<=12; m++) map[`${selYear}-${String(m).padStart(2,"0")}`] = { income:0, expense:0, month:m };
@@ -339,7 +606,7 @@
                 });
                 return Object.values(map).sort((a,b)=>a.month-b.month);
             }, [records, selYear]);
-            // 日度数据 (选中月份)
+
             const dailyData = useMemo(() => {
                 const map = {};
                 const daysInMonth = new Date(selYear, selMonth, 0).getDate();
@@ -356,124 +623,313 @@
                 });
                 return Object.values(map).sort((a,b)=>a.day-b.day);
             }, [records, selYear, selMonth]);
+
             const dataToUse = viewMode === "monthly" ? monthlyData : dailyData;
-            const MONTH_LABELS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-            const MONTH_NAMES  = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-            const incomeData  = dataToUse.map(d => ({ label: viewMode==="monthly" ? MONTH_LABELS[d.month-1] : String(d.day), value: d.income }));
-            const expenseData = dataToUse.map(d => ({ label: viewMode==="monthly" ? MONTH_LABELS[d.month-1] : String(d.day), value: d.expense }));
-            const totalIncome  = dataToUse.reduce((s,d)=>s+d.income,0);
+            const incomeData = dataToUse.map(d => ({ label: viewMode==="monthly" ? MONTH_SHORT[d.month-1] : String(d.day), value: d.income }));
+            const expenseData = dataToUse.map(d => ({ label: viewMode==="monthly" ? MONTH_SHORT[d.month-1] : String(d.day), value: d.expense }));
+            const totalIncome = dataToUse.reduce((s,d)=>s+d.income,0);
             const totalExpense = dataToUse.reduce((s,d)=>s+d.expense,0);
             const net = totalIncome - totalExpense;
-            const fmt2 = n => n>=10000?(n/10000).toFixed(2)+"k":n.toFixed(2); // 显示两位小数
-            const peakIncome  = [...dataToUse].sort((a,b)=>b.income-a.income)[0];
-            const peakExpense = [...dataToUse].sort((a,b)=>b.expense-a.expense)[0];
+            const fmt2 = n => n>=10000?(n/10000).toFixed(2)+"k":n.toFixed(2);
+
+            const peakIncome = useMemo(() => [...dataToUse].sort((a,b)=>b.income-a.income)[0], [dataToUse]);
+            const peakExpense = useMemo(() => [...dataToUse].sort((a,b)=>b.expense-a.expense)[0], [dataToUse]);
+
+            const expenseCategoryData = useMemo(() => {
+                const map = {};
+                records.forEach(r => {
+                    if (r.type !== "expense") return;
+                    const d = new Date(r.ts);
+                    if (d.getFullYear() !== selYear) return;
+                    if (viewMode === "daily" && d.getMonth()+1 !== selMonth) return;
+                    if (!map[r.category]) map[r.category] = { name:r.category, icon:r.icon, amount:0 };
+                    map[r.category].amount += r.amount;
+                });
+                return Object.values(map).sort((a,b)=>b.amount-a.amount).slice(0,8);
+            }, [records, selYear, selMonth, viewMode]);
+
+            const incomeCategoryData = useMemo(() => {
+                const map = {};
+                records.forEach(r => {
+                    if (r.type !== "income") return;
+                    const d = new Date(r.ts);
+                    if (d.getFullYear() !== selYear) return;
+                    if (viewMode === "daily" && d.getMonth()+1 !== selMonth) return;
+                    if (!map[r.category]) map[r.category] = { name:r.category, icon:r.icon, amount:0 };
+                    map[r.category].amount += r.amount;
+                });
+                return Object.values(map).sort((a,b)=>b.amount-a.amount).slice(0,8);
+            }, [records, selYear, selMonth, viewMode]);
+
+            const prevPeriodData = useMemo(() => {
+                let prevYear = selYear, prevMonth = selMonth;
+                if (viewMode === "monthly") { prevYear = selYear - 1; }
+                else { if (selMonth === 1) { prevYear = selYear - 1; prevMonth = 12; } else prevMonth = selMonth - 1; }
+                const map = { income:0, expense:0 };
+                records.forEach(r => {
+                    const d = new Date(r.ts);
+                    if (viewMode === "monthly") { if (d.getFullYear() === prevYear) map[r.type] += r.amount; }
+                    else { if (d.getFullYear() === prevYear && d.getMonth()+1 === prevMonth) map[r.type] += r.amount; }
+                });
+                return map;
+            }, [records, selYear, selMonth, viewMode]);
+
+            const summaryMetrics = useMemo(() => {
+                if (viewMode === "daily") {
+                    const activeDays = dailyData.filter(d => d.expense > 0).length;
+                    const zeroDays = dailyData.length - activeDays;
+                    const totalExp = dailyData.reduce((s,d) => s + d.expense, 0);
+                    const avgDaily = activeDays > 0 ? totalExp / activeDays : 0;
+                    return [
+                        { label: "Avg/Day", value: `¥${avgDaily.toFixed(0)}`, color: "#1a1a1a" },
+                        { label: "Active Days", value: activeDays, color: "#27ae60" },
+                        { label: "Zero-Spend", value: zeroDays, color: "#999" }
+                    ];
+                } else {
+                    const activeMonths = monthlyData.filter(d => d.expense > 0).length;
+                    const totalExp = monthlyData.reduce((s,d) => s + d.expense, 0);
+                    const avgMonthly = activeMonths > 0 ? totalExp / activeMonths : 0;
+                    return [
+                        { label: "Avg/Month", value: `¥${avgMonthly >= 10000 ? (avgMonthly/10000).toFixed(1)+"k" : avgMonthly.toFixed(0)}`, color: "#1a1a1a" },
+                        { label: "Active Months", value: activeMonths, color: "#27ae60" },
+                        { label: "Total Records", value: records.filter(r => new Date(r.ts).getFullYear()===selYear).length, color: "#999" }
+                    ];
+                }
+            }, [dailyData, monthlyData, viewMode, selYear, records]);
+
+            const changePercent = prevPeriodData.expense > 0 ? ((totalExpense - prevPeriodData.expense) / prevPeriodData.expense * 100) : null;
+
+            const entriesWithData = useMemo(() => dataToUse.filter(d => d.income > 0 || d.expense > 0).sort((a,b) => {
+                if (viewMode === "monthly") return b.month - a.month;
+                return b.day - a.day;
+            }), [dataToUse, viewMode]);
+            const RECENT_COUNT = 5;
+            const recentEntries = entriesWithData.slice(0, RECENT_COUNT);
+            const olderEntries = entriesWithData.slice(RECENT_COUNT);
+            const displayEntries = showAllEntries ? entriesWithData : recentEntries;
+
+            const emptySlot = (
+                <div style={{ textAlign:"center", padding:"30px 0" }}>
+                    <div style={{ fontSize:"40px", marginBottom:"10px" }}>📊</div>
+                    <div style={{ color:"#999", fontSize:"13px", marginBottom:"6px" }}>No records for this period</div>
+                    <div style={{ color:"#ccc", fontSize:"12px" }}>Add a record to see statistics</div>
+                </div>
+            );
+
             return (
-                <div style={{ position:"fixed", inset:0, background:"#F8F9FD", zIndex:150, maxWidth:"480px", margin:"0 auto", overflowY:"auto", animation:"slideInRight 0.28s ease" }}>
+                <div style={{ position:"fixed", inset:0, background:"#F8F9FD", zIndex:150, maxWidth:"480px", margin:"0 auto", display:"flex", flexDirection:"column", animation:"slideInRight 0.28s ease" }}>
                     {/* Header */}
-                    <div style={{ background:"linear-gradient(135deg,#1a1a1a 0%,#434343 100%)", padding:"50px 25px 28px", color:"#fff", borderRadius:"0 0 32px 32px", boxShadow:"0 10px 20px rgba(0,0,0,0.1)" }}>
-                        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"22px" }}>
+                    <div style={{ background:"linear-gradient(135deg,#1a1a1a 0%,#434343 100%)", padding:"44px 20px 14px", color:"#fff", borderRadius:"0 0 28px 28px", boxShadow:"0 6px 20px rgba(0,0,0,0.1)", flexShrink:0 }}>
+                        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
                             <button onClick={onClose} style={{ background:"rgba(255,255,255,0.15)", border:"none", borderRadius:"12px", padding:"8px 14px", color:"#fff", fontSize:"14px", fontWeight:"600", cursor:"pointer", display:"flex", alignItems:"center", gap:"6px" }}>
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
                                 Back
                             </button>
-                            <button onClick={() => setShowYearPicker(true)} style={{ display:"flex", alignItems:"center", gap:"6px", cursor:"pointer", background:"rgba(255,255,255,0.12)", border:"none", padding:"8px 16px", borderRadius:"12px", color:"#fff" }}>
-                                <span style={{ fontSize:"16px", fontWeight:"700" }}>{selYear} {viewMode==="daily" && `· ${String(selMonth).padStart(2,'0')}`}</span>
-                                <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M3 5l4 4 4-4" stroke="rgba(255,255,255,0.8)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                            </button>
-                        </div>
-                        {/* 汇总数据 */}
-                        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"10px" }}>
-                            {[
-                                { label: viewMode==="monthly"?"Annual Income":"Monthly Income",  val:totalIncome,  color:"#4eca7f" },
-                                { label: viewMode==="monthly"?"Annual Expense":"Monthly Expense", val:totalExpense, color:"#ff6b6b" },
-                                { label:"Net Savings",    val:net,     color:net>=0?"#4eca7f":"#ff6b6b", sign:true }
-                            ].map((c,i) => (
-                                <div key={i} style={{ background:"rgba(255,255,255,0.1)", borderRadius:"16px", padding:"14px 10px" }}>
-                                    <div style={{ fontSize:"10px", opacity:0.6, marginBottom:"6px" }}>{c.label}</div>
-                                    <div style={{ fontSize:"15px", fontWeight:"800", color:c.color }}>
-                                        {c.sign && net>0?"+":""}¥{fmt2(Math.abs(c.val))}
+                            <div style={{ display:"flex", alignItems:"center", gap:"8px" }}>
+                                <button onClick={goPrev} style={{ background:"rgba(255,255,255,0.15)", border:"none", borderRadius:"10px", width:"32px", height:"32px", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", color:"#fff" }}>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+                                </button>
+                                <button onClick={() => viewMode==="monthly" ? setShowYearPicker(true) : setShowYMPicker(true)}
+                                    style={{ display:"flex", alignItems:"center", gap:"4px", cursor:"pointer", background:"rgba(255,255,255,0.12)", border:"none", padding:"6px 14px", borderRadius:"12px", color:"#fff" }}>
+                                    <span style={{ fontSize:"16px", fontWeight:"700" }}>{selYear}{viewMode==="daily" && ` · ${String(selMonth).padStart(2,'0')}`}</span>
+                                    <svg width="10" height="10" viewBox="0 0 14 14" fill="none"><path d="M3 5l4 4 4-4" stroke="rgba(255,255,255,0.8)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                </button>
+                                <button onClick={goNext} style={{ background:"rgba(255,255,255,0.15)", border:"none", borderRadius:"10px", width:"32px", height:"32px", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", color:"#fff" }}>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                                </button>
+                            </div>
+                            <div style={{ display:"flex", gap:"6px" }}>
+                                {["monthly","daily"].map(m => (
+                                    <div key={m} onClick={() => switchViewMode(m)}
+                                        style={{ padding:"4px 10px", borderRadius:"8px", fontSize:"11px", fontWeight:"600", cursor:"pointer",
+                                            background: viewMode===m ? "rgba(255,255,255,0.25)" : "transparent", color:"#fff", transition:"0.15s" }}>
+                                        {m === "monthly" ? "Year" : "Month"}
                                     </div>
-                                </div>
-                            ))}
+                                ))}
+                            </div>
                         </div>
                     </div>
-                    <div style={{ padding:"20px" }}>
-                        {/* 视图模式切换 (月度/日度) */}
-                        <div style={{ display:"flex", background:"#fff", borderRadius:"16px", padding:"5px", marginBottom:"16px", boxShadow:"0 4px 15px rgba(0,0,0,0.04)" }}>
-                            {["monthly","daily"].map(m => (
-                                <button key={m} className="tab-btn" onClick={() => setViewMode(m)}
-                                    style={{ background: viewMode===m ? "#1a1a1a" : "transparent", color: viewMode===m ? "#fff" : "#999" }}>
-                                    {m === "monthly" ? "Monthly" : "Daily"}
-                                </button>
-                            ))}
-                        </div>
-                        {/* 图表类型切换 */}
-                        <div style={{ display:"flex", background:"#fff", borderRadius:"16px", padding:"5px", gap:"4px", marginBottom:"16px", boxShadow:"0 4px 15px rgba(0,0,0,0.04)" }}>
-                            {[{key:"expense",label:"Expense",color:"#e74c3c"},{key:"income",label:"Income",color:"#27ae60"},{key:"both",label:"Compare",color:"#1a1a1a"}].map(t => (
-                                <button key={t.key} className="tab-btn" onClick={() => switchType(t.key)}
-                                    style={{ background:chartType===t.key?t.color:"transparent", color:chartType===t.key?"#fff":"#999" }}>
-                                    {t.label}
-                                </button>
-                            ))}
-                        </div>
-                        {/* 图表卡片 */}
-                        <div style={{ background:"#fff", borderRadius:"20px", padding:"20px 16px 12px", marginBottom:"16px", boxShadow:"0 4px 20px rgba(0,0,0,0.04)" }}>
-                            <div style={{ fontSize:"12px", color:"#bbb", fontWeight:"600", marginBottom:"14px" }}>
-                                {selYear} {viewMode==="daily" && `· ${MONTH_NAMES[selMonth-1]}`} {chartType==="expense"?"Trend":chartType==="income"?"Trend":"Income vs Expense"}
-                            </div>
-                            {chartType==="both"
-                                ? <BothChart incomeData={incomeData} expenseData={expenseData} animKey={animKey}/>
-                                : <LineChart data={chartType==="income"?incomeData:expenseData} type={chartType} animKey={animKey}/>
-                            }
-                        </div>
-                        {/* 明细表格 */}
-                        <div style={{ background:"#fff", borderRadius:"20px", overflow:"hidden", boxShadow:"0 4px 20px rgba(0,0,0,0.04)", marginBottom:"16px" }}>
-                            <div style={{ padding:"14px 18px 10px", display:"flex", justifyContent:"space-between", fontSize:"11px", color:"#bbb", fontWeight:"700", borderBottom:"1px solid #f5f5f5", letterSpacing:"0.5px" }}>
-                                <span>{viewMode === "monthly" ? "Month" : "Day"}</span>
-                                <div style={{ display:"flex", gap:"12px" }}>
-                                    <span style={{ color:"#27ae60", minWidth:"52px", textAlign:"right" }}>Income</span>
-                                    <span style={{ color:"#e74c3c", minWidth:"52px", textAlign:"right" }}>Expense</span>
-                                    <span style={{ minWidth:"56px", textAlign:"right" }}>Net</span>
-                                </div>
-                            </div>
-                            {dataToUse.map((d,i) => {
-                                const netVal = d.income-d.expense;
-                                const has = d.income>0||d.expense>0;
-                                return (
-                                    <div key={i} style={{ padding:"11px 18px", display:"flex", justifyContent:"space-between", alignItems:"center", borderBottom:i<dataToUse.length-1?"1px solid #f9f9f9":"none", opacity:has?1:0.3 }}>
-                                        <span style={{ fontSize:"14px", fontWeight:"600", color:"#333" }}>{viewMode==="monthly" ? MONTH_NAMES[d.month-1] : d.day}</span>
-                                        <div style={{ display:"flex", gap:"12px" }}>
-                                            <span style={{ fontSize:"12px", color:"#27ae60", fontWeight:"600", minWidth:"52px", textAlign:"right" }}>{d.income>0?`+${fmt2(d.income)}`:"—"}</span>
-                                            <span style={{ fontSize:"12px", color:"#e74c3c", fontWeight:"600", minWidth:"52px", textAlign:"right" }}>{d.expense>0?`-${fmt2(d.expense)}`:"—"}</span>
-                                            <span style={{ fontSize:"12px", fontWeight:"700", color:netVal>0?"#27ae60":netVal<0?"#e74c3c":"#ccc", minWidth:"56px", textAlign:"right" }}>
-                                                {has?`${netVal>=0?"+":""}${fmt2(netVal)}`:"—"}
-                                            </span>
+
+                    {/* 4-Panel Horizontal Scroll */}
+                    <div ref={panelsRef} className="stats-panels" onScroll={handleScroll}>
+                        {/* P1: Chart + Summary */}
+                        <div className="stats-panel">
+                            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"8px", marginBottom:"16px" }}>
+                                {[
+                                    { label: viewMode==="monthly"?"Annual Income":"Monthly Income", val:totalIncome, color:"#4eca7f" },
+                                    { label: viewMode==="monthly"?"Annual Expense":"Monthly Expense", val:totalExpense, color:"#ff6b6b" },
+                                    { label:"Net", val:net, color:net>=0?"#4eca7f":"#ff6b6b", sign:true }
+                                ].map((c,i) => (
+                                    <div key={i} style={{ background:"#fff", borderRadius:"16px", padding:"14px 10px", boxShadow:"0 2px 12px rgba(0,0,0,0.04)", textAlign:"center" }}>
+                                        <div style={{ fontSize:"10px", color:"#999", fontWeight:"600", marginBottom:"6px" }}>{c.label}</div>
+                                        <div style={{ fontSize:"16px", fontWeight:"800", color:c.color }}>
+                                            {c.sign && net>0?"+":""}¥{fmt2(Math.abs(c.val))}
                                         </div>
                                     </div>
-                                );
-                            })}
+                                ))}
+                            </div>
+                            <div style={{ display:"flex", background:"#fff", borderRadius:"14px", padding:"4px", gap:"4px", marginBottom:"16px", boxShadow:"0 2px 10px rgba(0,0,0,0.04)" }}>
+                                {[{key:"expense",label:"Expense",color:"#e74c3c"},{key:"income",label:"Income",color:"#27ae60"},{key:"both",label:"Compare",color:"#1a1a1a"}].map(t => (
+                                    <button key={t.key} className="tab-btn" onClick={() => switchType(t.key)}
+                                        style={{ background:chartType===t.key?t.color:"transparent", color:chartType===t.key?"#fff":"#999", fontSize:"13px", padding:"8px" }}>
+                                        {t.label}
+                                    </button>
+                                ))}
+                            </div>
+                            <div style={{ background:"#fff", borderRadius:"20px", padding:"20px 16px 12px", boxShadow:"0 4px 20px rgba(0,0,0,0.04)" }}>
+                                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"14px" }}>
+                                    <div style={{ fontSize:"12px", color:"#bbb", fontWeight:"600" }}>
+                                        {selYear}{viewMode==="daily" && ` · ${MONTH_NAMES[selMonth-1]}`} · {chartType==="expense"?"Expense Trend":chartType==="income"?"Income Trend":"Income vs Expense"}
+                                    </div>
+                                    <div style={{ display:"flex", background:"#f5f5f5", borderRadius:"8px", padding:"2px", gap:"2px" }}>
+                                        {[{key:"line",icon:"📈"},{key:"bar",icon:"📊"}].map(v => (
+                                            <div key={v.key} onClick={() => setChartDisplay(v.key)}
+                                                style={{ padding:"4px 10px", borderRadius:"6px", fontSize:"13px", cursor:"pointer",
+                                                    background:chartDisplay===v.key?"#fff":"transparent", boxShadow:chartDisplay===v.key?"0 1px 4px rgba(0,0,0,0.1)":"none",
+                                                    transition:"0.15s" }}>
+                                                {v.icon}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                                {chartType === "both"
+                                    ? <BothChart incomeData={incomeData} expenseData={expenseData} animKey={animKey} emptySlot={emptySlot} chartDisplay={chartDisplay}/>
+                                    : <LineChart data={chartType==="income"?incomeData:expenseData} type={chartType} animKey={animKey} emptySlot={emptySlot} chartDisplay={chartDisplay}/>
+                                }
+                            </div>
                         </div>
-                        {/* 峰值卡片 */}
-                        {(peakIncome.income>0||peakExpense.expense>0) && (
-                            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"12px", marginBottom:"24px" }}>
-                                {peakIncome.income>0 && (
-                                    <div style={{ background:"#eafaf1", borderRadius:"16px", padding:"16px" }}>
-                                        <div style={{ fontSize:"10px", color:"#27ae60", fontWeight:"700", marginBottom:"6px" }}>💰 Top {viewMode==="monthly"?"Income Month":"Income Day"}</div>
-                                        <div style={{ fontSize:"20px", fontWeight:"800", color:"#27ae60" }}>{viewMode==="monthly" ? MONTH_NAMES[peakIncome.month-1] : peakIncome.day}</div>
-                                        <div style={{ fontSize:"12px", color:"#27ae60", opacity:0.8 }}>¥{fmt2(peakIncome.income)}</div>
+
+                        {/* P2: Detail Table */}
+                        <div className="stats-panel">
+                            <div style={{ background:"#fff", borderRadius:"20px", overflow:"hidden", boxShadow:"0 4px 20px rgba(0,0,0,0.04)" }}>
+                                <div style={{ padding:"14px 18px 10px", display:"flex", justifyContent:"space-between", fontSize:"11px", color:"#bbb", fontWeight:"700", borderBottom:"1px solid #f5f5f5", letterSpacing:"0.5px" }}>
+                                    <span>{viewMode === "monthly" ? "Month" : "Day"}</span>
+                                    <div style={{ display:"flex", gap:"12px" }}>
+                                        <span style={{ color:"#27ae60", minWidth:"52px", textAlign:"right" }}>Income</span>
+                                        <span style={{ color:"#e74c3c", minWidth:"52px", textAlign:"right" }}>Expense</span>
+                                        <span style={{ minWidth:"56px", textAlign:"right" }}>Net</span>
                                     </div>
-                                )}
-                                {peakExpense.expense>0 && (
-                                    <div style={{ background:"#fff1f0", borderRadius:"16px", padding:"16px" }}>
-                                        <div style={{ fontSize:"10px", color:"#e74c3c", fontWeight:"700", marginBottom:"6px" }}>🛍️ Top {viewMode==="monthly"?"Expense Month":"Expense Day"}</div>
-                                        <div style={{ fontSize:"20px", fontWeight:"800", color:"#e74c3c" }}>{viewMode==="monthly" ? MONTH_NAMES[peakExpense.month-1] : peakExpense.day}</div>
-                                        <div style={{ fontSize:"12px", color:"#e74c3c", opacity:0.8 }}>¥{fmt2(peakExpense.expense)}</div>
-                                    </div>
+                                </div>
+                                {entriesWithData.length === 0 ? (
+                                    <div style={{ textAlign:"center", color:"#ccc", fontSize:"13px", padding:"40px 0" }}>No records for this period</div>
+                                ) : (
+                                    <>
+                                        {displayEntries.map((d, i, arr) => {
+                                            const netVal = d.income - d.expense;
+                                            return (
+                                                <div key={viewMode==="monthly" ? d.month : d.day}
+                                                    style={{ padding:"12px 18px", display:"flex", justifyContent:"space-between", alignItems:"center",
+                                                        borderBottom: i < arr.length-1 ? "1px solid #f9f9f9" : "none" }}>
+                                                    <span style={{ fontSize:"14px", fontWeight:"600", color:"#333" }}>
+                                                        {viewMode==="monthly" ? MONTH_NAMES[d.month-1] : `Day ${d.day}`}
+                                                    </span>
+                                                    <div style={{ display:"flex", gap:"12px" }}>
+                                                        <span style={{ fontSize:"12px", color:"#27ae60", fontWeight:"600", minWidth:"52px", textAlign:"right" }}>
+                                                            {d.income > 0 ? `+${fmt2(d.income)}` : "—"}
+                                                        </span>
+                                                        <span style={{ fontSize:"12px", color:"#e74c3c", fontWeight:"600", minWidth:"52px", textAlign:"right" }}>
+                                                            {d.expense > 0 ? `-${fmt2(d.expense)}` : "—"}
+                                                        </span>
+                                                        <span style={{ fontSize:"12px", fontWeight:"700", color: netVal > 0 ? "#27ae60" : netVal < 0 ? "#e74c3c" : "#ccc", minWidth:"56px", textAlign:"right" }}>
+                                                            {`${netVal >= 0 ? "+" : ""}${fmt2(netVal)}`}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                        {olderEntries.length > 0 && (
+                                            <div onClick={() => setShowAllEntries(v => !v)}
+                                                style={{ padding:"14px", textAlign:"center", fontSize:"13px", fontWeight:"600", color:"#999",
+                                                    borderTop: "1px solid #f5f5f5", cursor:"pointer", transition:"0.15s" }}>
+                                                {showAllEntries ? "▲ Collapse" : `▾ Show ${olderEntries.length} more entries`}
+                                            </div>
+                                        )}
+                                    </>
                                 )}
                             </div>
-                        )}
+                        </div>
+
+                        {/* P3: Category Bar Charts */}
+                        <div className="stats-panel">
+                            <div style={{ background:"#fff", borderRadius:"20px", padding:"20px 16px", boxShadow:"0 4px 20px rgba(0,0,0,0.04)", marginBottom:"16px" }}>
+                                <div style={{ fontSize:"13px", fontWeight:"700", color:"#333", marginBottom:"16px" }}>📊 Expense Categories</div>
+                                {expenseCategoryData.length === 0
+                                    ? <div style={{ textAlign:"center", color:"#ccc", fontSize:"13px", padding:"20px 0" }}>No expense data</div>
+                                    : <CategoryBarChart data={expenseCategoryData} type="expense" animKey={animKey}/>
+                                }
+                            </div>
+                            <div style={{ background:"#fff", borderRadius:"20px", padding:"20px 16px", boxShadow:"0 4px 20px rgba(0,0,0,0.04)" }}>
+                                <div style={{ fontSize:"13px", fontWeight:"700", color:"#333", marginBottom:"16px" }}>📊 Income Categories</div>
+                                {incomeCategoryData.length === 0
+                                    ? <div style={{ textAlign:"center", color:"#ccc", fontSize:"13px", padding:"20px 0" }}>No income data</div>
+                                    : <CategoryBarChart data={incomeCategoryData} type="income" animKey={animKey}/>
+                                }
+                            </div>
+                        </div>
+
+                        {/* P4: Analysis */}
+                        <div className="stats-panel">
+                            {(peakIncome.income > 0 || peakExpense.expense > 0) && (
+                                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"12px", marginBottom:"16px" }}>
+                                    {peakIncome.income > 0 && (
+                                        <div style={{ background:"#eafaf1", borderRadius:"16px", padding:"16px" }}>
+                                            <div style={{ fontSize:"10px", color:"#27ae60", fontWeight:"700", marginBottom:"6px" }}>💰 Top {viewMode==="monthly"?"Income Month":"Income Day"}</div>
+                                            <div style={{ fontSize:"22px", fontWeight:"800", color:"#27ae60" }}>{viewMode==="monthly" ? MONTH_NAMES[peakIncome.month-1] : `Day ${peakIncome.day}`}</div>
+                                            <div style={{ fontSize:"13px", color:"#27ae60", opacity:0.8, marginTop:"4px" }}>¥{fmt2(peakIncome.income)}</div>
+                                        </div>
+                                    )}
+                                    {peakExpense.expense > 0 && (
+                                        <div style={{ background:"#fff1f0", borderRadius:"16px", padding:"16px" }}>
+                                            <div style={{ fontSize:"10px", color:"#e74c3c", fontWeight:"700", marginBottom:"6px" }}>🛍️ Top {viewMode==="monthly"?"Expense Month":"Expense Day"}</div>
+                                            <div style={{ fontSize:"22px", fontWeight:"800", color:"#e74c3c" }}>{viewMode==="monthly" ? MONTH_NAMES[peakExpense.month-1] : `Day ${peakExpense.day}`}</div>
+                                            <div style={{ fontSize:"13px", color:"#e74c3c", opacity:0.8, marginTop:"4px" }}>¥{fmt2(peakExpense.expense)}</div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"10px", marginBottom:"16px" }}>
+                                {summaryMetrics.map((m, i) => (
+                                    <div key={i} style={{ background:"#fff", borderRadius:"16px", padding:"16px 10px", boxShadow:"0 2px 10px rgba(0,0,0,0.04)", textAlign:"center" }}>
+                                        <div style={{ fontSize:"20px", fontWeight:"800", color:m.color }}>{m.value}</div>
+                                        <div style={{ fontSize:"10px", color:"#999", fontWeight:"600", marginTop:"6px" }}>{m.label}</div>
+                                    </div>
+                                ))}
+                            </div>
+                            {changePercent !== null && (
+                                <div style={{ background:"#fff", borderRadius:"16px", padding:"16px", boxShadow:"0 2px 10px rgba(0,0,0,0.04)" }}>
+                                    <div style={{ fontSize:"12px", fontWeight:"700", color:"#333", marginBottom:"10px" }}>📈 vs Previous Period</div>
+                                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                                        <div>
+                                            <div style={{ fontSize:"11px", color:"#999" }}>Expense Change</div>
+                                            <div style={{ fontSize:"20px", fontWeight:"800", color: changePercent > 0 ? "#e74c3c" : "#27ae60" }}>
+                                                {changePercent > 0 ? "+" : ""}{changePercent.toFixed(1)}%
+                                            </div>
+                                        </div>
+                                        <div style={{ textAlign:"right" }}>
+                                            <div style={{ fontSize:"11px", color:"#999" }}>This vs Previous</div>
+                                            <div style={{ fontSize:"13px", fontWeight:"600", color:"#333" }}>
+                                                ¥{fmt2(totalExpense)} vs ¥{fmt2(prevPeriodData.expense)}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
+
+                    {/* Dot Indicator */}
+                    <div className="dot-indicator" style={{ flexShrink:0, background:"#F8F9FD" }}>
+                        {[0,1,2,3].map(i => (
+                            <div key={i} className={`dot ${activePanel === i ? 'active' : ''}`}
+                                onClick={() => {
+                                    if (panelsRef.current) panelsRef.current.scrollTo({ left: i * panelsRef.current.clientWidth, behavior:'smooth' });
+                                }}
+                                style={{ cursor:"pointer" }} />
+                        ))}
+                    </div>
+
                     {showYearPicker && <YearPickerModal value={selYear} onConfirm={switchYear} onClose={() => setShowYearPicker(false)}/>}
+                    {showYMPicker && <YearMonthPickerModal year={selYear} month={selMonth} onConfirm={switchYearMonth} onClose={() => setShowYMPicker(false)}/>}
                 </div>
             );
         }
