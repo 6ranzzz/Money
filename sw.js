@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v5';
+const CACHE_VERSION = 'v6';
 const CACHE_NAME = 'accounting-app-' + CACHE_VERSION;
 
 const STATIC_FILES = [
@@ -8,7 +8,8 @@ const STATIC_FILES = [
 ];
 
 const CDN_HOSTS = [
-  'unpkg.com'
+  'unpkg.com',
+  'cdn.jsdelivr.net'
 ];
 
 self.addEventListener('install', (event) => {
